@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   actionlint:
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6.0.2
       - uses: reviewdog/action-actionlint@v1.72.0
