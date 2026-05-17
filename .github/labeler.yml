@@ -1,0 +1,14 @@
+ci:
+  - changed-files:
+      - any-glob-to-any-file: ".github/**"
+docs:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/*.md"
+          - LICENSE
+source:
+  - changed-files:
+      - any-glob-to-any-file: "src/**"
+tests:
+  - changed-files:
+      - any-glob-to-any-file: "test/**"

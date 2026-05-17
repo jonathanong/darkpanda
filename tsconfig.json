@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "declaration": true,
+    "exactOptionalPropertyTypes": true,
+    "lib": ["ES2024"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noUncheckedIndexedAccess": true,
+    "outDir": "dist",
+    "rootDir": ".",
+    "strict": true,
+    "target": "ES2024",
+    "types": ["node", "vitest/globals"],
+    "verbatimModuleSyntax": true
+  },
+  "include": ["src/**/*.mts", "test/**/*.mts", "vitest.config.mts"]
+}

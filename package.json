@@ -1,0 +1,41 @@
+{
+  "name": "darkpanda",
+  "version": "0.1.0",
+  "description": "Extensible Lightpanda child-process management for Node.js",
+  "license": "MIT",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "coverage": "vitest run --coverage",
+    "format": "oxfmt .",
+    "format:check": "oxfmt --check .",
+    "lint": "oxlint --max-warnings=0",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm coverage && pnpm build"
+  },
+  "devDependencies": {
+    "@types/node": "25.8.0",
+    "@vitest/coverage-v8": "4.1.6",
+    "oxfmt": "0.50.0",
+    "oxlint": "1.65.0",
+    "typescript": "6.0.3",
+    "vitest": "4.1.6"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "packageManager": "pnpm@11.1.2"
+}

@@ -1,0 +1,16 @@
+name: Actionlint
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  actionlint:
+    runs-on: ubuntu-slim
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: reviewdog/action-actionlint@v1.72.0
