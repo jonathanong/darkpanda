@@ -15,20 +15,20 @@ export class LightpandaStartError extends Error {
   }
 }
 
-let defaultController: LightpandaController | undefined;
+let defaultController: Promise<LightpandaController> | undefined;
 
-export async function startLightpanda(options?: LightpandaOptions): Promise<LightpandaController> {
+export function startLightpanda(options?: LightpandaOptions): Promise<LightpandaController> {
   if (defaultController !== undefined) return defaultController;
-  defaultController = await startManagedLightpanda(normalizeOptions(options));
+  defaultController = startManagedLightpanda(normalizeOptions(options));
   return defaultController;
 }
 
 export function createLightpandaManager(defaults: LightpandaOptions = {}): LightpandaManager {
-  let controller: LightpandaController | undefined;
+  let controller: Promise<LightpandaController> | undefined;
   return {
-    async start(overrides: LightpandaOptions = {}) {
+    start(overrides: LightpandaOptions = {}) {
       if (controller !== undefined) return controller;
-      controller = await startManagedLightpanda(normalizeOptions({ ...defaults, ...overrides }));
+      controller = startManagedLightpanda(normalizeOptions({ ...defaults, ...overrides }));
       return controller;
     },
   };
