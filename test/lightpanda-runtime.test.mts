@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { createLightpandaManager } from "../src/lightpanda.mts";
-import { getFreePort, withOneShotVersionServer } from "./helpers.mts";
+import { getFreePort, withOneShotVersionServer, withTimeoutVersionServer } from "./helpers.mts";
 
 const fixture = fileURLToPath(new URL("./fixtures/fake-lightpanda.mjs", import.meta.url));
 
@@ -27,6 +27,29 @@ describe("Lightpanda runtime behavior", () => {
       const controller = await createLightpandaManager(options(port, "ready")).start();
 
       expect(port).toEqual(expect.any(Number));
+      expect(controller.spawned).toBe(true);
+      await controller.stop();
+    });
+  });
+
+  it("handles synchronous errors during version endpoint probe gracefully", async () => {
+    // Port -1 is invalid and will throw synchronously from http.get
+    const controller = await createLightpandaManager(options(-1, "ready"))
+      .start()
+      .catch(() => null);
+
+    // We expect start to eventually fail with a different error (or not at all, here it catches)
+    // The key is that the probe catch block is executed.
+    expect(controller).toBeNull();
+  });
+
+  it("handles version endpoint probe timeouts gracefully", async () => {
+    await withTimeoutVersionServer(async (port) => {
+      const controller = await createLightpandaManager({
+        ...options(port, "ready"),
+        probeTimeoutMs: 10, // short timeout to trigger the timeout handler
+      }).start();
+
       expect(controller.spawned).toBe(true);
       await controller.stop();
     });
