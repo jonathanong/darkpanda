@@ -45,7 +45,6 @@ function createHttpServer(status: number, host: string) {
   const server = http.createServer((_req, res) => {
     res.writeHead(status, { "content-type": "application/json" });
     res.end("{}");
-    server.close();
   });
   server.listen(0, host);
   return server;
