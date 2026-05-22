@@ -42,7 +42,6 @@ export async function withOneShotVersionServer<T>(
   const server = http.createServer((_req, res) => {
     res.writeHead(status, { "content-type": "application/json" });
     res.end("{}");
-    server.close();
   });
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
