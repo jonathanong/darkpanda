@@ -20,7 +20,15 @@ let defaultController: Promise<LightpandaController> | undefined;
 
 export function startLightpanda(options?: LightpandaOptions): Promise<LightpandaController> {
   if (defaultController !== undefined) return defaultController;
+<<<<<<< HEAD
   defaultController = startManagedLightpanda(normalizeOptions(options));
+=======
+  const startup = startManagedLightpanda(normalizeOptions(options));
+  defaultController = startup.catch((error) => {
+    defaultController = undefined;
+    throw error;
+  });
+>>>>>>> 19ab40c (Normalize probe origins and URL host formatting)
   return defaultController;
 }
 
@@ -29,14 +37,22 @@ export function createLightpandaManager(defaults: LightpandaOptions = {}): Light
   return {
     start(overrides: LightpandaOptions = {}) {
       if (controller !== undefined) return controller;
+<<<<<<< HEAD
       controller = startManagedLightpanda(normalizeOptions({ ...defaults, ...overrides }));
+=======
+      const startup = startManagedLightpanda(normalizeOptions({ ...defaults, ...overrides }));
+      controller = startup.catch((error) => {
+        controller = undefined;
+        throw error;
+      });
+>>>>>>> 19ab40c (Normalize probe origins and URL host formatting)
       return controller;
     },
   };
 }
 
 async function startManagedLightpanda(options: NormalizedOptions): Promise<LightpandaController> {
-  const cdpUrl = `ws://${options.host}:${options.port}`;
+  const cdpUrl = getCdpUrl(options);
   if (await isLightpandaRunning(options)) {
     return createExternalController(options.host, options.port, cdpUrl);
   }
@@ -64,6 +80,7 @@ async function isLightpandaRunning(options: NormalizedOptions): Promise<boolean>
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), probeTimeoutMs);
   try {
+<<<<<<< HEAD
     return await new Promise<boolean>((resolve, reject) => {
       const req = http.get(
         {
@@ -79,12 +96,35 @@ async function isLightpandaRunning(options: NormalizedOptions): Promise<boolean>
         },
       );
       req.once("error", reject);
+=======
+    const baseUrl = getBaseUrl(options);
+    const url = new URL(options.versionPath, baseUrl);
+    if (url.origin !== baseUrl.origin) {
+      return false;
+    }
+    const response = await fetch(url, {
+      signal: AbortSignal.timeout(options.probeTimeoutMs),
+>>>>>>> 19ab40c (Normalize probe origins and URL host formatting)
     });
   } catch {
     return false;
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function getBaseUrl(options: NormalizedOptions): URL {
+  const baseUrl = new URL("http://localhost");
+  baseUrl.hostname = options.host;
+  baseUrl.port = String(options.port);
+  return baseUrl;
+}
+
+function getCdpUrl(options: NormalizedOptions): string {
+  const cdpUrl = new URL("ws://localhost");
+  cdpUrl.hostname = options.host;
+  cdpUrl.port = String(options.port);
+  return cdpUrl.origin;
 }
 
 function waitForPort(options: NormalizedOptions): Promise<void> {
