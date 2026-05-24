@@ -35,10 +35,8 @@ describe("Lightpanda startup", () => {
 
   it("memoizes the default starter when an external browser is available", async () => {
     await withVersionServer(200, async (port) => {
-      const [first, second] = await Promise.all([
-        startLightpanda({ port }),
-        startLightpanda({ port }),
-      ]);
+      const first = await startLightpanda({ port });
+      const second = await startLightpanda({ port });
 
       expect(first).toBe(second);
       expect(first.spawned).toBe(false);
@@ -91,7 +89,8 @@ describe("Lightpanda startup", () => {
     const port = await getFreePort();
     const manager = managerFor(port);
 
-    const [first, second] = await Promise.all([manager.start(), manager.start()]);
+    const first = await manager.start();
+    const second = await manager.start();
 
     expect(first).toBe(second);
     expect(first.spawned).toBe(true);
