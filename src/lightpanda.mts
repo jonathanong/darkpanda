@@ -20,15 +20,11 @@ let defaultController: Promise<LightpandaController> | undefined;
 
 export function startLightpanda(options?: LightpandaOptions): Promise<LightpandaController> {
   if (defaultController !== undefined) return defaultController;
-<<<<<<< HEAD
-  defaultController = startManagedLightpanda(normalizeOptions(options));
-=======
   const startup = startManagedLightpanda(normalizeOptions(options));
   defaultController = startup.catch((error) => {
     defaultController = undefined;
     throw error;
   });
->>>>>>> 19ab40c (Normalize probe origins and URL host formatting)
   return defaultController;
 }
 
@@ -37,15 +33,11 @@ export function createLightpandaManager(defaults: LightpandaOptions = {}): Light
   return {
     start(overrides: LightpandaOptions = {}) {
       if (controller !== undefined) return controller;
-<<<<<<< HEAD
-      controller = startManagedLightpanda(normalizeOptions({ ...defaults, ...overrides }));
-=======
       const startup = startManagedLightpanda(normalizeOptions({ ...defaults, ...overrides }));
       controller = startup.catch((error) => {
         controller = undefined;
         throw error;
       });
->>>>>>> 19ab40c (Normalize probe origins and URL host formatting)
       return controller;
     },
   };
