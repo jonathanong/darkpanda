@@ -60,8 +60,6 @@ async function startManagedLightpanda(options: NormalizedOptions): Promise<Light
 }
 
 async function isLightpandaRunning(options: NormalizedOptions): Promise<boolean> {
-  // ⚡ Bolt: Using http.get instead of fetch() to avoid Undici cold-start overhead,
-  // which saves ~40-100ms on the initial probe when starting Lightpanda.
   try {
     return await new Promise((resolve) => {
       const req = http.get(
