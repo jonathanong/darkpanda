@@ -92,15 +92,17 @@ async function isLightpandaRunning(options: NormalizedOptions): Promise<boolean>
 }
 
 function getBaseUrl(options: NormalizedOptions): URL {
-  const baseUrl = new URL("http://localhost");
-  baseUrl.hostname = options.host;
+  const normalizedHost =
+    net.isIP(options.host) === 6 && !options.host.startsWith("[") ? `[${options.host}]` : options.host;
+  const baseUrl = new URL(`http://${normalizedHost}`);
   baseUrl.port = String(options.port);
   return baseUrl;
 }
 
 function getCdpUrl(options: NormalizedOptions): string {
-  const cdpUrl = new URL("ws://localhost");
-  cdpUrl.hostname = options.host;
+  const normalizedHost =
+    net.isIP(options.host) === 6 && !options.host.startsWith("[") ? `[${options.host}]` : options.host;
+  const cdpUrl = new URL(`ws://${normalizedHost}`);
   cdpUrl.port = String(options.port);
   return cdpUrl.origin;
 }
