@@ -35,30 +35,6 @@ export async function withVersionServer<T>(
   }
 }
 
-export async function withTimeoutVersionServer<T>(
-  status: number,
-  delayMs: number,
-  callback: (port: number) => Promise<T>,
-): Promise<T> {
-  const server = http.createServer((_req, res) => {
-    setTimeout(() => {
-      res.writeHead(status, { "content-type": "application/json" });
-      res.end("{}");
-    }, delayMs);
-  });
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
-  const address = server.address();
-  if (address === null || typeof address === "string") {
-    throw new Error("expected tcp address");
-  }
-  try {
-    return await callback(address.port);
-  } finally {
-    await new Promise<void>((resolve) => server.close(() => resolve()));
-  }
-}
-
 export async function withOneShotVersionServer<T>(
   status: number,
   callback: (port: number) => Promise<T>,

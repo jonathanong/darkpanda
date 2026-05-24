@@ -1,6 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import net from "node:net";
-import http from "node:http";
 import { normalizeOptions } from "./options.mjs";
 import type {
   LightpandaController,
@@ -16,35 +15,40 @@ export class LightpandaStartError extends Error {
   }
 }
 
-let defaultController: Promise<LightpandaController> | undefined;
+let defaultControllerPromise: Promise<LightpandaController> | undefined;
 
-export async function startLightpanda(options?: LightpandaOptions): Promise<LightpandaController> {
-  if (defaultController !== undefined) return defaultController;
-  const startup = startManagedLightpanda(normalizeOptions(options));
-  defaultController = startup.catch((error) => {
-    defaultController = undefined;
-    throw error;
+// Exported for testing so tests can clear the global state
+export function _clearDefaultControllerForTesting() {
+  defaultControllerPromise = undefined;
+}
+
+export function startLightpanda(options?: LightpandaOptions): Promise<LightpandaController> {
+  if (defaultControllerPromise !== undefined) return defaultControllerPromise;
+  defaultControllerPromise = startManagedLightpanda(normalizeOptions(options)).catch((err) => {
+    defaultControllerPromise = undefined;
+    throw err;
   });
-  return defaultController;
+  return defaultControllerPromise;
 }
 
 export function createLightpandaManager(defaults: LightpandaOptions = {}): LightpandaManager {
-  let controller: Promise<LightpandaController> | undefined;
+  let controllerPromise: Promise<LightpandaController> | undefined;
   return {
-    async start(overrides: LightpandaOptions = {}) {
-      if (controller !== undefined) return controller;
-      const startup = startManagedLightpanda(normalizeOptions({ ...defaults, ...overrides }));
-      controller = startup.catch((error) => {
-        controller = undefined;
-        throw error;
+    start(overrides: LightpandaOptions = {}) {
+      if (controllerPromise !== undefined) return controllerPromise;
+      controllerPromise = startManagedLightpanda(
+        normalizeOptions({ ...defaults, ...overrides }),
+      ).catch((err) => {
+        controllerPromise = undefined;
+        throw err;
       });
-      return controller;
+      return controllerPromise;
     },
   };
 }
 
 async function startManagedLightpanda(options: NormalizedOptions): Promise<LightpandaController> {
-  const cdpUrl = getCdpUrl(options);
+  const cdpUrl = `ws://${options.host}:${options.port}`;
   if (await isLightpandaRunning(options)) {
     return createExternalController(options.host, options.port, cdpUrl);
   }
@@ -68,41 +72,15 @@ async function startManagedLightpanda(options: NormalizedOptions): Promise<Light
 }
 
 async function isLightpandaRunning(options: NormalizedOptions): Promise<boolean> {
-  const { probeTimeoutMs } = options;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), probeTimeoutMs);
   try {
-    const baseUrl = getBaseUrl(options);
-    const versionUrl = new URL(options.versionPath, baseUrl);
-    if (versionUrl.origin !== baseUrl.origin) {
-      return false;
-    }
-    return await new Promise<boolean>((resolve, reject) => {
-      const req = http.get(versionUrl, { method: "GET", signal: controller.signal }, (response) => {
-        response.resume();
-        resolve(response.statusCode !== undefined && response.statusCode >= 200 && response.statusCode < 300);
-      });
-      req.once("error", reject);
+    const url = `http://${options.host}:${options.port}${options.versionPath}`;
+    const response = await fetch(url, {
+      signal: AbortSignal.timeout(options.probeTimeoutMs),
     });
+    return response.ok;
   } catch {
     return false;
-  } finally {
-    clearTimeout(timeout);
   }
-}
-
-function getBaseUrl(options: NormalizedOptions): URL {
-  const baseUrl = new URL("http://localhost");
-  baseUrl.hostname = options.host;
-  baseUrl.port = String(options.port);
-  return baseUrl;
-}
-
-function getCdpUrl(options: NormalizedOptions): string {
-  const cdpUrl = new URL("ws://localhost");
-  cdpUrl.hostname = options.host;
-  cdpUrl.port = String(options.port);
-  return cdpUrl.origin;
 }
 
 function waitForPort(options: NormalizedOptions): Promise<void> {
