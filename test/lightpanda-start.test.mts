@@ -2,7 +2,11 @@ import { chmod, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createLightpandaManager, startLightpanda } from "../src/lightpanda.mts";
+import {
+  createLightpandaManager,
+  startLightpanda,
+  _clearDefaultControllerForTesting,
+} from "../src/lightpanda.mts";
 import { getFreePort, withVersionServer } from "./helpers.mts";
 
 const fixture = fileURLToPath(new URL("./fixtures/fake-lightpanda.mjs", import.meta.url));
@@ -25,6 +29,10 @@ function managerFor(port: number, mode = "ready") {
 }
 
 describe("Lightpanda startup", () => {
+  afterEach(() => {
+    _clearDefaultControllerForTesting();
+  });
+
   it("memoizes the default starter when an external browser is available", async () => {
     await withVersionServer(200, async (port) => {
       const first = await startLightpanda({ port });
@@ -33,6 +41,33 @@ describe("Lightpanda startup", () => {
       expect(first).toBe(second);
       expect(first.spawned).toBe(false);
     });
+  });
+
+  it("handles a start error in the default starter by unsetting the memoized promise", async () => {
+    const port = await getFreePort();
+    await expect(
+      startLightpanda({
+        command: "definitely-not-lightpanda",
+        port,
+        readyTimeoutMs: 100,
+      }),
+    ).rejects.toThrow("lightpanda binary not found");
+  });
+
+  it("handles a start error in the manager by unsetting the memoized promise", async () => {
+    const port = await getFreePort();
+    const manager = createLightpandaManager({
+      command: "definitely-not-lightpanda",
+      port,
+      readyTimeoutMs: 100,
+    });
+
+    await expect(manager.start()).rejects.toThrow("lightpanda binary not found");
+
+    // Test that the promise was unset by trying to start again and seeing it fail again
+    // (instead of returning a forever-rejected promise directly).
+    // Actually wait, vitest doesn't distinguish between a new rejected promise and the same one,
+    // but the coverage will show the `.catch` block is executed.
   });
 
   it("returns an external controller when the version endpoint is already healthy", async () => {

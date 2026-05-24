@@ -16,29 +16,34 @@ export class LightpandaStartError extends Error {
   }
 }
 
-let defaultController: LightpandaController | undefined;
+let defaultControllerPromise: Promise<LightpandaController> | undefined;
 
-export async function startLightpanda(options?: LightpandaOptions): Promise<LightpandaController> {
-  if (defaultController !== undefined) return defaultController;
-  const startup = startManagedLightpanda(normalizeOptions(options));
-  defaultController = startup.catch((error) => {
-    defaultController = undefined;
-    throw error;
+// Exported for testing so tests can clear the global state
+export function _clearDefaultControllerForTesting() {
+  defaultControllerPromise = undefined;
+}
+
+export function startLightpanda(options?: LightpandaOptions): Promise<LightpandaController> {
+  if (defaultControllerPromise !== undefined) return defaultControllerPromise;
+  defaultControllerPromise = startManagedLightpanda(normalizeOptions(options)).catch((err) => {
+    defaultControllerPromise = undefined;
+    throw err;
   });
-  return defaultController;
+  return defaultControllerPromise;
 }
 
 export function createLightpandaManager(defaults: LightpandaOptions = {}): LightpandaManager {
-  let controller: LightpandaController | undefined;
+  let controllerPromise: Promise<LightpandaController> | undefined;
   return {
-    async start(overrides: LightpandaOptions = {}) {
-      if (controller !== undefined) return controller;
-      const startup = startManagedLightpanda(normalizeOptions({ ...defaults, ...overrides }));
-      controller = startup.catch((error) => {
-        controller = undefined;
-        throw error;
+    start(overrides: LightpandaOptions = {}) {
+      if (controllerPromise !== undefined) return controllerPromise;
+      controllerPromise = startManagedLightpanda(
+        normalizeOptions({ ...defaults, ...overrides }),
+      ).catch((err) => {
+        controllerPromise = undefined;
+        throw err;
       });
-      return controller;
+      return controllerPromise;
     },
   };
 }
