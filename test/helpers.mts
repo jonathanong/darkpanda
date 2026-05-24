@@ -69,5 +69,9 @@ export async function withTimeoutVersionServer<T>(
   if (address === null || typeof address === "string") {
     throw new Error("expected tcp address");
   }
-  return await callback(address.port);
+  try {
+    return await callback(address.port);
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
 }
