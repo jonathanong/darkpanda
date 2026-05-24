@@ -1,4 +1,5 @@
 import { fileURLToPath } from "node:url";
+import http from "node:http";
 import { createLightpandaManager } from "../src/lightpanda.mts";
 import { getFreePort, withOneShotVersionServer, withTimeoutVersionServer } from "./helpers.mts";
 
@@ -33,14 +34,18 @@ describe("Lightpanda runtime behavior", () => {
   });
 
   it("handles synchronous errors during version endpoint probe gracefully", async () => {
-    // Port -1 is invalid and will throw synchronously from http.get
-    const controller = await createLightpandaManager(options(-1, "ready"))
-      .start()
-      .catch(() => null);
+    const port = await getFreePort();
+    const spy = vi.spyOn(http, "get").mockImplementationOnce(() => {
+      throw new Error("synchronous probe failure");
+    });
 
-    // We expect start to eventually fail with a different error (or not at all, here it catches)
-    // The key is that the probe catch block is executed.
-    expect(controller).toBeNull();
+    try {
+      const controller = await createLightpandaManager(options(port, "ready")).start();
+      expect(controller.spawned).toBe(true);
+      await controller.stop();
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it("handles version endpoint probe timeouts gracefully", async () => {
