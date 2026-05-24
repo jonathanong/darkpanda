@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import net from "node:net";
+import http from "node:http";
 import { normalizeOptions } from "./options.mjs";
 import type {
   LightpandaController,
@@ -59,14 +60,30 @@ async function startManagedLightpanda(options: NormalizedOptions): Promise<Light
 }
 
 async function isLightpandaRunning(options: NormalizedOptions): Promise<boolean> {
+  const { host, port, versionPath, probeTimeoutMs } = options;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), probeTimeoutMs);
   try {
-    const url = `http://${options.host}:${options.port}${options.versionPath}`;
-    const response = await fetch(url, {
-      signal: AbortSignal.timeout(options.probeTimeoutMs),
+    return await new Promise<boolean>((resolve, reject) => {
+      const req = http.get(
+        {
+          host,
+          port,
+          path: versionPath,
+          method: "GET",
+          signal: controller.signal,
+        },
+        (response) => {
+          response.resume();
+          resolve(response.statusCode !== undefined && response.statusCode >= 200 && response.statusCode < 300);
+        },
+      );
+      req.once("error", reject);
     });
-    return response.ok;
   } catch {
     return false;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 

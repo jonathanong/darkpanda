@@ -1,3 +1,4 @@
+import http from "node:http";
 import { fileURLToPath } from "node:url";
 import { createLightpandaManager } from "../src/lightpanda.mts";
 import { getFreePort, withOneShotVersionServer } from "./helpers.mts";
@@ -30,6 +31,21 @@ describe("Lightpanda runtime behavior", () => {
       expect(controller.spawned).toBe(true);
       await controller.stop();
     });
+  });
+
+  it("falls back to spawning when the probe throws synchronously", async () => {
+    const port = await getFreePort();
+    const spy = vi.spyOn(http, "get").mockImplementation(() => {
+      throw new Error("probe failed");
+    });
+    try {
+      const controller = await createLightpandaManager(options(port, "ready")).start();
+
+      expect(controller.spawned).toBe(true);
+      await controller.stop();
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it("registers successful startups with a shutdown registry", async () => {

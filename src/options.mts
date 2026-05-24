@@ -26,6 +26,13 @@ export function normalizeOptions(options: LightpandaOptions = {}): NormalizedOpt
     LIGHTPANDA_DISABLE_TELEMETRY: String(!(options.telemetry ?? false)),
     ...options.env,
   };
+  const versionPath = options.versionPath ?? "/json/version";
+  if (typeof versionPath !== "string") {
+    throw new TypeError("versionPath must be a string");
+  }
+  if (!versionPath.startsWith("/") || versionPath.startsWith("//")) {
+    throw new Error("versionPath must start with a single '/' and cannot start with '//'");
+  }
   return {
     args,
     command: options.command ?? "lightpanda",
@@ -40,6 +47,6 @@ export function normalizeOptions(options: LightpandaOptions = {}): NormalizedOpt
     shutdownTimeoutMs: options.shutdownTimeoutMs ?? DEFAULT_SHUTDOWN_TIMEOUT_MS,
     spawnOptions: options.spawnOptions ?? {},
     stdio: options.stdio ?? ["ignore", "inherit", "inherit"],
-    versionPath: options.versionPath ?? "/json/version",
+    versionPath,
   };
 }

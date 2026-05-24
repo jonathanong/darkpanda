@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createLightpandaManager, startLightpanda } from "../src/lightpanda.mts";
+import { normalizeOptions } from "../src/options.mjs";
 import { getFreePort, withVersionServer } from "./helpers.mts";
 
 const fixture = fileURLToPath(new URL("./fixtures/fake-lightpanda.mjs", import.meta.url));
@@ -27,13 +28,15 @@ function managerFor(port: number, mode = "ready") {
 describe("Lightpanda startup", () => {
   it("memoizes the default starter when an external browser is available", async () => {
     await withVersionServer(200, async (port) => {
-      const [first, second] = await Promise.all([
-        startLightpanda({ port }),
-        startLightpanda({ port }),
-      ]);
+      const first = startLightpanda({ port });
+      const second = startLightpanda({ port });
 
       expect(first).toBe(second);
-      expect(first.spawned).toBe(false);
+      const firstController = await first;
+      const secondController = await second;
+
+      expect(firstController).toBe(secondController);
+      expect(firstController.spawned).toBe(false);
     });
   });
 
@@ -56,13 +59,18 @@ describe("Lightpanda startup", () => {
     const port = await getFreePort();
     const manager = managerFor(port);
 
-    const [first, second] = await Promise.all([manager.start(), manager.start()]);
+    const first = manager.start();
+    const second = manager.start();
 
     expect(first).toBe(second);
-    expect(first.spawned).toBe(true);
-    expect(first.process?.pid).toEqual(expect.any(Number));
-    await first.stop();
-    expect(first.process?.killed).toBe(true);
+    const firstController = await first;
+    const secondController = await second;
+
+    expect(firstController).toBe(secondController);
+    expect(firstController.spawned).toBe(true);
+    expect(firstController.process?.pid).toEqual(expect.any(Number));
+    await firstController.stop();
+    expect(firstController.process?.killed).toBe(true);
   });
 
   it("uses generated serve arguments and disables telemetry by default", async () => {
@@ -172,10 +180,19 @@ describe("Lightpanda startup", () => {
     ).rejects.toThrow("EACCES");
   });
 
-  it("rejects when the process exits before the port is ready", async () => {
+  it("retries startup after a failed manager start", async () => {
     const port = await getFreePort();
+    const manager = managerFor(port, "exit");
+    const first = manager.start();
+    const second = manager.start();
 
-    await expect(managerFor(port, "exit").start()).rejects.toThrow(
+    expect(first).toBe(second);
+    await expect(first).rejects.toThrow(
+      `Lightpanda exited with code 23 before port 127.0.0.1:${port} was ready`,
+    );
+    const third = manager.start();
+    expect(third).not.toBe(first);
+    await expect(third).rejects.toThrow(
       `Lightpanda exited with code 23 before port 127.0.0.1:${port} was ready`,
     );
   });
@@ -193,6 +210,18 @@ describe("Lightpanda startup", () => {
 
     await expect(managerFor(port, "hang").start()).rejects.toThrow(
       `Lightpanda not ready after 500ms on 127.0.0.1:${port}`,
+    );
+  });
+
+  it("rejects non-string versionPath values", () => {
+    expect(() => normalizeOptions({ versionPath: 123 as unknown as string })).toThrow(
+      "versionPath must be a string",
+    );
+  });
+
+  it("rejects versionPath values that do not start with a single slash", () => {
+    expect(() => normalizeOptions({ versionPath: "//evil.com" })).toThrow(
+      "versionPath must start with a single '/' and cannot start with '//'",
     );
   });
 });
