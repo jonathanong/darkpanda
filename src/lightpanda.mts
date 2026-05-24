@@ -20,7 +20,11 @@ let defaultController: LightpandaController | undefined;
 
 export async function startLightpanda(options?: LightpandaOptions): Promise<LightpandaController> {
   if (defaultController !== undefined) return defaultController;
-  defaultController = await startManagedLightpanda(normalizeOptions(options));
+  const startup = startManagedLightpanda(normalizeOptions(options));
+  defaultController = startup.catch((error) => {
+    defaultController = undefined;
+    throw error;
+  });
   return defaultController;
 }
 
@@ -29,14 +33,18 @@ export function createLightpandaManager(defaults: LightpandaOptions = {}): Light
   return {
     async start(overrides: LightpandaOptions = {}) {
       if (controller !== undefined) return controller;
-      controller = await startManagedLightpanda(normalizeOptions({ ...defaults, ...overrides }));
+      const startup = startManagedLightpanda(normalizeOptions({ ...defaults, ...overrides }));
+      controller = startup.catch((error) => {
+        controller = undefined;
+        throw error;
+      });
       return controller;
     },
   };
 }
 
 async function startManagedLightpanda(options: NormalizedOptions): Promise<LightpandaController> {
-  const cdpUrl = `ws://${options.host}:${options.port}`;
+  const cdpUrl = getCdpUrl(options);
   if (await isLightpandaRunning(options)) {
     return createExternalController(options.host, options.port, cdpUrl);
   }
@@ -60,31 +68,41 @@ async function startManagedLightpanda(options: NormalizedOptions): Promise<Light
 }
 
 async function isLightpandaRunning(options: NormalizedOptions): Promise<boolean> {
-  // ⚡ Bolt: Using http.get instead of fetch() to avoid Undici cold-start overhead,
-  // which saves ~40-100ms on the initial probe when starting Lightpanda.
   try {
-    return await new Promise((resolve) => {
-      const req = http.get(
-        {
-          host: options.host,
-          port: options.port,
-          path: options.versionPath,
-          timeout: options.probeTimeoutMs,
-        },
-        (res) => {
-          res.resume(); // drain to allow socket reuse/closure
+    const { probeTimeoutMs } = options;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), probeTimeoutMs);
+    try {
+      const baseUrl = getBaseUrl(options);
+      const versionUrl = new URL(options.versionPath, baseUrl);
+      if (versionUrl.origin !== baseUrl.origin) return false;
+      return await new Promise<boolean>((resolve, reject) => {
+        const req = http.get(versionUrl, { method: "GET", signal: controller.signal }, (res) => {
+          res.resume();
           resolve(res.statusCode !== undefined && res.statusCode >= 200 && res.statusCode < 300);
-        },
-      );
-      req.on("error", () => resolve(false));
-      req.on("timeout", () => {
-        req.destroy();
-        resolve(false);
+        });
+        req.once("error", reject);
       });
-    });
+    } finally {
+      clearTimeout(timeout);
+    }
   } catch {
     return false;
   }
+}
+
+function getBaseUrl(options: NormalizedOptions): URL {
+  const baseUrl = new URL("http://localhost");
+  baseUrl.hostname = options.host;
+  baseUrl.port = String(options.port);
+  return baseUrl;
+}
+
+function getCdpUrl(options: NormalizedOptions): string {
+  const cdpUrl = new URL("ws://localhost");
+  cdpUrl.hostname = options.host;
+  cdpUrl.port = String(options.port);
+  return cdpUrl.origin;
 }
 
 function waitForPort(options: NormalizedOptions): Promise<void> {
