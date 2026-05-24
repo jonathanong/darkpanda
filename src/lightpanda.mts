@@ -15,21 +15,34 @@ export class LightpandaStartError extends Error {
   }
 }
 
-let defaultController: Promise<LightpandaController> | undefined;
+let defaultControllerPromise: Promise<LightpandaController> | undefined;
+
+// Exported for testing so tests can clear the global state
+export function _clearDefaultControllerForTesting() {
+  defaultControllerPromise = undefined;
+}
 
 export function startLightpanda(options?: LightpandaOptions): Promise<LightpandaController> {
-  if (defaultController !== undefined) return defaultController;
-  defaultController = startManagedLightpanda(normalizeOptions(options));
-  return defaultController;
+  if (defaultControllerPromise !== undefined) return defaultControllerPromise;
+  defaultControllerPromise = startManagedLightpanda(normalizeOptions(options)).catch((err) => {
+    defaultControllerPromise = undefined;
+    throw err;
+  });
+  return defaultControllerPromise;
 }
 
 export function createLightpandaManager(defaults: LightpandaOptions = {}): LightpandaManager {
-  let controller: Promise<LightpandaController> | undefined;
+  let controllerPromise: Promise<LightpandaController> | undefined;
   return {
     start(overrides: LightpandaOptions = {}) {
-      if (controller !== undefined) return controller;
-      controller = startManagedLightpanda(normalizeOptions({ ...defaults, ...overrides }));
-      return controller;
+      if (controllerPromise !== undefined) return controllerPromise;
+      controllerPromise = startManagedLightpanda(
+        normalizeOptions({ ...defaults, ...overrides }),
+      ).catch((err) => {
+        controllerPromise = undefined;
+        throw err;
+      });
+      return controllerPromise;
     },
   };
 }

@@ -1,4 +1,5 @@
-## 2024-05-21 - Concurrent startups cause race condition
+## 2024-10-18 - Memoizing pending promises
 
-**Learning:** `startLightpanda` and `manager.start` check for a memoized controller using `if (controller !== undefined) return controller;` and then use `await` before assigning the controller `controller = await startManagedLightpanda(...)`. If these functions are called concurrently (e.g. `Promise.all([startLightpanda(), startLightpanda()])`), the `await` allows other tasks to run before `controller` is set, leading to `startManagedLightpanda` being called multiple times and spawning multiple processes unnecessarily. This is both a performance issue and a functional bug.
-**Action:** Store the _promise_ returned by `startManagedLightpanda` in the `controller` variable, rather than the resolved value. Then return the promise. This ensures that concurrent calls will await the same promise and only spawn one process.
+**Learning:** When writing async initialization logic, memoizing the resolved value after an `await` introduces a race condition for concurrent requests. If two calls occur before the first finishes, the initialization function runs twice. Caching the `Promise` itself synchronously ensures all concurrent callers wait on the same execution instance.
+
+**Action:** Look for modules or singletons that initialize state asynchronously and make sure they memoize the promise, not just the result. Always add `.catch` handlers to clear the cached promise if initialization fails, to avoid permanent error states.
