@@ -73,8 +73,6 @@ async function startManagedLightpanda(options: NormalizedOptions): Promise<Light
 }
 
 async function isLightpandaRunning(options: NormalizedOptions): Promise<boolean> {
-  // ⚡ Bolt: Using http.get instead of fetch() to avoid Undici cold-start overhead,
-  // which saves ~40-100ms on the initial probe when starting Lightpanda.
   try {
     const { probeTimeoutMs } = options;
     const controller = new AbortController();
@@ -100,9 +98,7 @@ async function isLightpandaRunning(options: NormalizedOptions): Promise<boolean>
 
 function getBaseUrl(options: NormalizedOptions): URL {
   const normalizedHost =
-    net.isIP(options.host) === 6 && !options.host.startsWith("[")
-      ? `[${options.host}]`
-      : options.host;
+    net.isIP(options.host) === 6 && !options.host.startsWith("[") ? `[${options.host}]` : options.host;
   const baseUrl = new URL(`http://${normalizedHost}`);
   baseUrl.port = String(options.port);
   return baseUrl;
@@ -110,9 +106,7 @@ function getBaseUrl(options: NormalizedOptions): URL {
 
 function getCdpUrl(options: NormalizedOptions): string {
   const normalizedHost =
-    net.isIP(options.host) === 6 && !options.host.startsWith("[")
-      ? `[${options.host}]`
-      : options.host;
+    net.isIP(options.host) === 6 && !options.host.startsWith("[") ? `[${options.host}]` : options.host;
   const cdpUrl = new URL(`ws://${normalizedHost}`);
   cdpUrl.port = String(options.port);
   return cdpUrl.origin;
