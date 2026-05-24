@@ -14,45 +14,8 @@ export async function getFreePort(): Promise<number> {
   return address.port;
 }
 
-export async function withVersionServer<T>(
-  status: number,
-  callback: (port: number) => Promise<T>,
-): Promise<T> {
-  return withServer(
-    (_req, res) => {
-      res.writeHead(status, { "content-type": "application/json" });
-      res.end("{}");
-    },
-    callback,
-  );
-}
-
-export async function withOneShotVersionServer<T>(
-  status: number,
-  callback: (port: number) => Promise<T>,
-): Promise<T> {
-  return withServer(
-    (_req, res) => {
-      res.writeHead(status, { "content-type": "application/json" });
-      res.end("{}");
-    },
-    callback,
-  );
-}
-
-export async function withTimeoutVersionServer<T>(
-  callback: (port: number) => Promise<T>,
-): Promise<T> {
-  return withServer(
-    (_req, _res) => {
-      // intentionally don't respond to simulate a timeout
-    },
-    callback,
-  );
-}
-
-async function withServer<T>(
-  handler: (req: http.IncomingMessage, res: http.ServerResponse) => void,
+async function createServerHelper<T>(
+  handler: http.RequestListener,
   callback: (port: number) => Promise<T>,
 ): Promise<T> {
   const server = http.createServer(handler);
@@ -67,4 +30,33 @@ async function withServer<T>(
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }
+}
+
+export async function withVersionServer<T>(
+  status: number,
+  callback: (port: number) => Promise<T>,
+): Promise<T> {
+  return createServerHelper((_req, res) => {
+    res.writeHead(status, { "content-type": "application/json" });
+    res.end("{}");
+  }, callback);
+}
+
+export async function withOneShotVersionServer<T>(
+  status: number,
+  callback: (port: number) => Promise<T>,
+): Promise<T> {
+  return createServerHelper(function (this: http.Server, _req, res) {
+    res.writeHead(status, { "content-type": "application/json" });
+    res.end("{}");
+    this.close();
+  }, callback);
+}
+
+export async function withTimeoutVersionServer<T>(
+  callback: (port: number) => Promise<T>,
+): Promise<T> {
+  return createServerHelper((_req, _res) => {
+    // intentionally don't respond to simulate a timeout
+  }, callback);
 }
