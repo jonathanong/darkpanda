@@ -1,0 +1,4 @@
+## 2024-05-21 - Concurrent startups cause race condition
+
+**Learning:** `startLightpanda` and `manager.start` check for a memoized controller using `if (controller !== undefined) return controller;` and then use `await` before assigning the controller `controller = await startManagedLightpanda(...)`. If these functions are called concurrently (e.g. `Promise.all([startLightpanda(), startLightpanda()])`), the `await` allows other tasks to run before `controller` is set, leading to `startManagedLightpanda` being called multiple times and spawning multiple processes unnecessarily. This is both a performance issue and a functional bug.
+**Action:** Store the _promise_ returned by `startManagedLightpanda` in the `controller` variable, rather than the resolved value. Then return the promise. This ensures that concurrent calls will await the same promise and only spawn one process.
