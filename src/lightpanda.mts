@@ -18,7 +18,7 @@ export class LightpandaStartError extends Error {
 
 let defaultController: Promise<LightpandaController> | undefined;
 
-export function startLightpanda(options?: LightpandaOptions): Promise<LightpandaController> {
+export async function startLightpanda(options?: LightpandaOptions): Promise<LightpandaController> {
   if (defaultController !== undefined) return defaultController;
   const startup = startManagedLightpanda(normalizeOptions(options));
   defaultController = startup.catch((error) => {
@@ -31,7 +31,7 @@ export function startLightpanda(options?: LightpandaOptions): Promise<Lightpanda
 export function createLightpandaManager(defaults: LightpandaOptions = {}): LightpandaManager {
   let controller: Promise<LightpandaController> | undefined;
   return {
-    start(overrides: LightpandaOptions = {}) {
+    async start(overrides: LightpandaOptions = {}) {
       if (controller !== undefined) return controller;
       const startup = startManagedLightpanda(normalizeOptions({ ...defaults, ...overrides }));
       controller = startup.catch((error) => {
@@ -68,35 +68,21 @@ async function startManagedLightpanda(options: NormalizedOptions): Promise<Light
 }
 
 async function isLightpandaRunning(options: NormalizedOptions): Promise<boolean> {
-  const { host, port, versionPath, probeTimeoutMs } = options;
+  const { probeTimeoutMs } = options;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), probeTimeoutMs);
   try {
-<<<<<<< HEAD
-    return await new Promise<boolean>((resolve, reject) => {
-      const req = http.get(
-        {
-          host,
-          port,
-          path: versionPath,
-          method: "GET",
-          signal: controller.signal,
-        },
-        (response) => {
-          response.resume();
-          resolve(response.statusCode !== undefined && response.statusCode >= 200 && response.statusCode < 300);
-        },
-      );
-      req.once("error", reject);
-=======
     const baseUrl = getBaseUrl(options);
-    const url = new URL(options.versionPath, baseUrl);
-    if (url.origin !== baseUrl.origin) {
+    const versionUrl = new URL(options.versionPath, baseUrl);
+    if (versionUrl.origin !== baseUrl.origin) {
       return false;
     }
-    const response = await fetch(url, {
-      signal: AbortSignal.timeout(options.probeTimeoutMs),
->>>>>>> 19ab40c (Normalize probe origins and URL host formatting)
+    return await new Promise<boolean>((resolve, reject) => {
+      const req = http.get(versionUrl, { method: "GET", signal: controller.signal }, (response) => {
+        response.resume();
+        resolve(response.statusCode !== undefined && response.statusCode >= 200 && response.statusCode < 300);
+      });
+      req.once("error", reject);
     });
   } catch {
     return false;
