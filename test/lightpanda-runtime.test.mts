@@ -1,6 +1,7 @@
 import { fileURLToPath } from "node:url";
+import http from "node:http";
 import { createLightpandaManager } from "../src/lightpanda.mts";
-import { getFreePort, withOneShotVersionServer } from "./helpers.mts";
+import { getFreePort, withOneShotVersionServer, withTimeoutVersionServer } from "./helpers.mts";
 
 const fixture = fileURLToPath(new URL("./fixtures/fake-lightpanda.mjs", import.meta.url));
 
@@ -27,6 +28,33 @@ describe("Lightpanda runtime behavior", () => {
       const controller = await createLightpandaManager(options(port, "ready")).start();
 
       expect(port).toEqual(expect.any(Number));
+      expect(controller.spawned).toBe(true);
+      await controller.stop();
+    });
+  });
+
+  it("handles synchronous errors during version endpoint probe gracefully", async () => {
+    const port = await getFreePort();
+    const spy = vi.spyOn(http, "get").mockImplementationOnce(() => {
+      throw new Error("synchronous probe failure");
+    });
+
+    try {
+      const controller = await createLightpandaManager(options(port, "ready")).start();
+      expect(controller.spawned).toBe(true);
+      await controller.stop();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("handles version endpoint probe timeouts gracefully", async () => {
+    await withTimeoutVersionServer(async (port) => {
+      const controller = await createLightpandaManager({
+        ...options(port, "ready"),
+        probeTimeoutMs: 10, // short timeout to trigger the timeout handler
+      }).start();
+
       expect(controller.spawned).toBe(true);
       await controller.stop();
     });
