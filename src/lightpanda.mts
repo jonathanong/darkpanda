@@ -91,23 +91,27 @@ function waitForPort(options: NormalizedOptions): Promise<void> {
   const deadline = Date.now() + options.readyTimeoutMs;
   return new Promise((resolve, reject) => {
     const attempt = () => {
-      const socket = net.connect(options.port, options.host);
-      socket.once("connect", () => {
-        socket.destroy();
-        resolve();
-      });
-      socket.once("error", () => {
-        socket.destroy();
-        if (Date.now() >= deadline) {
-          reject(
-            new LightpandaStartError(
-              `Lightpanda not ready after ${options.readyTimeoutMs}ms on ${options.host}:${options.port}`,
-            ),
-          );
-          return;
-        }
-        setTimeout(attempt, 25).unref();
-      });
+      try {
+        const socket = net.connect(options.port, options.host);
+        socket.once("connect", () => {
+          socket.destroy();
+          resolve();
+        });
+        socket.once("error", () => {
+          socket.destroy();
+          if (Date.now() >= deadline) {
+            reject(
+              new LightpandaStartError(
+                `Lightpanda not ready after ${options.readyTimeoutMs}ms on ${options.host}:${options.port}`,
+              ),
+            );
+            return;
+          }
+          setTimeout(attempt, 25).unref();
+        });
+      } catch (err) {
+        reject(err);
+      }
     };
     attempt();
   });
