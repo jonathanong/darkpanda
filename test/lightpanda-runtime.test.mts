@@ -23,6 +23,16 @@ function options(port: number, mode: string) {
 }
 
 describe("Lightpanda runtime behavior", () => {
+  it("handles manager start cache rejection", async () => {
+    const manager = createLightpandaManager({ command: "definitely-not-lightpanda" });
+    const p1 = manager.start();
+    await expect(p1).rejects.toThrow("lightpanda binary not found");
+
+    // The promise should have been cleared, so another call will retry
+    const p2 = manager.start();
+    expect(p2).not.toBe(p1);
+    await expect(p2).rejects.toThrow("lightpanda binary not found");
+  });
   it("treats an unhealthy version endpoint as not running and spawns", async () => {
     await withOneShotVersionServer(503, async (port) => {
       const controller = await createLightpandaManager(options(port, "ready")).start();

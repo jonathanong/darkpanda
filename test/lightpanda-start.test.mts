@@ -2,7 +2,11 @@ import { chmod, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createLightpandaManager, startLightpanda } from "../src/lightpanda.mts";
+import {
+  createLightpandaManager,
+  startLightpanda,
+  clearDefaultController,
+} from "../src/lightpanda.mts";
 import { getFreePort, withVersionServer } from "./helpers.mts";
 
 const fixture = fileURLToPath(new URL("./fixtures/fake-lightpanda.mjs", import.meta.url));
@@ -25,6 +29,19 @@ function managerFor(port: number, mode = "ready") {
 }
 
 describe("Lightpanda startup", () => {
+  afterEach(() => {
+    clearDefaultController();
+  });
+
+  it("handles startLightpanda cache rejection", async () => {
+    const p1 = startLightpanda({ command: "definitely-not-lightpanda" });
+    await expect(p1).rejects.toThrow("lightpanda binary not found");
+
+    // The promise should have been cleared, so another call will retry
+    const p2 = startLightpanda({ command: "definitely-not-lightpanda" });
+    expect(p2).not.toBe(p1);
+    await expect(p2).rejects.toThrow("lightpanda binary not found");
+  });
   it("memoizes the default starter when an external browser is available", async () => {
     await withVersionServer(200, async (port) => {
       const first = await startLightpanda({ port });

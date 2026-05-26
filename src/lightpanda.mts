@@ -16,17 +16,19 @@ export class LightpandaStartError extends Error {
   }
 }
 
+let defaultControllerPromise: Promise<LightpandaController> | undefined;
 // ⚡ Bolt: Memoize the Promise instead of the resolved controller to prevent concurrent calls
 // from triggering redundant process spawns and port probes.
-let defaultControllerPromise: Promise<LightpandaController> | undefined;
-
 export function startLightpanda(options?: LightpandaOptions): Promise<LightpandaController> {
   if (defaultControllerPromise !== undefined) return defaultControllerPromise;
-  defaultControllerPromise = startManagedLightpanda(normalizeOptions(options)).catch((err) => {
-    defaultControllerPromise = undefined;
+  const promise = startManagedLightpanda(normalizeOptions(options)).catch((err) => {
+    if (defaultControllerPromise === promise) {
+      defaultControllerPromise = undefined;
+    }
     throw err;
   });
-  return defaultControllerPromise;
+  defaultControllerPromise = promise;
+  return promise;
 }
 
 export function createLightpandaManager(defaults: LightpandaOptions = {}): LightpandaManager {
@@ -34,13 +36,16 @@ export function createLightpandaManager(defaults: LightpandaOptions = {}): Light
   return {
     start(overrides: LightpandaOptions = {}) {
       if (controllerPromise !== undefined) return controllerPromise;
-      controllerPromise = startManagedLightpanda(
+      const promise = startManagedLightpanda(
         normalizeOptions({ ...defaults, ...overrides }),
       ).catch((err) => {
-        controllerPromise = undefined;
+        if (controllerPromise === promise) {
+          controllerPromise = undefined;
+        }
         throw err;
       });
-      return controllerPromise;
+      controllerPromise = promise;
+      return promise;
     },
   };
 }
@@ -207,4 +212,9 @@ function createSpawnedController(
     spawned: true,
     stop: runtime.stop,
   };
+}
+
+// Exported for testing to clear module state
+export function clearDefaultController() {
+  defaultControllerPromise = undefined;
 }
