@@ -18,29 +18,44 @@ export class LightpandaStartError extends Error {
 
 // ⚡ Bolt: Memoize the Promise instead of the resolved controller to prevent concurrent calls
 // from triggering redundant process spawns and port probes.
-let defaultControllerPromise: Promise<LightpandaController> | undefined;
+let defaultController: Promise<LightpandaController> | undefined;
+
+// ⚡ Bolt: Added resetDefaultController for testing to clear memoized global state
+// and prevent test bleed when testing failure recovery.
+export function resetDefaultControllerForTest() {
+  defaultController = undefined;
+}
 
 export function startLightpanda(options?: LightpandaOptions): Promise<LightpandaController> {
-  if (defaultControllerPromise !== undefined) return defaultControllerPromise;
-  defaultControllerPromise = startManagedLightpanda(normalizeOptions(options)).catch((err) => {
-    defaultControllerPromise = undefined;
+  if (defaultController !== undefined) return defaultController;
+
+  // ⚡ Bolt: Cache the Promise instead of the resolved controller to prevent race conditions
+  // on concurrent calls, avoiding multiple expensive and unnecessary process spawns.
+  // We clear the cache on failure to allow subsequent retry attempts.
+  defaultController = startManagedLightpanda(normalizeOptions(options)).catch((err) => {
+    defaultController = undefined;
     throw err;
   });
-  return defaultControllerPromise;
+  return defaultController;
 }
 
 export function createLightpandaManager(defaults: LightpandaOptions = {}): LightpandaManager {
-  let controllerPromise: Promise<LightpandaController> | undefined;
+  let controller: Promise<LightpandaController> | undefined;
   return {
     start(overrides: LightpandaOptions = {}) {
-      if (controllerPromise !== undefined) return controllerPromise;
-      controllerPromise = startManagedLightpanda(
-        normalizeOptions({ ...defaults, ...overrides }),
-      ).catch((err) => {
-        controllerPromise = undefined;
-        throw err;
-      });
-      return controllerPromise;
+      if (controller !== undefined) return controller;
+
+      // ⚡ Bolt: Cache the Promise instead of the resolved controller to prevent race conditions
+      // on concurrent calls, avoiding multiple expensive and unnecessary process spawns.
+      // We clear the cache on failure to allow subsequent retry attempts.
+      controller = startManagedLightpanda(normalizeOptions({ ...defaults, ...overrides })).catch(
+        (err) => {
+          controller = undefined;
+          throw err;
+        },
+      );
+      return controller;
+
     },
   };
 }

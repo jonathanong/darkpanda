@@ -195,3 +195,50 @@ describe("Lightpanda startup", () => {
     );
   });
 });
+
+it("clears the cache on start failure to allow subsequent retries", async () => {
+  const port = await getFreePort();
+  const manager = createLightpandaManager({
+    command: "definitely-not-lightpanda",
+    port,
+    readyTimeoutMs: 50,
+    probeTimeoutMs: 50,
+  });
+
+  try {
+    await manager.start();
+    throw new Error("Should have thrown");
+  } catch {
+    // expected
+  }
+
+  await expect(manager.start()).rejects.toThrow("lightpanda binary not found");
+});
+
+it("clears the global default controller cache on start failure to allow subsequent retries", async () => {
+  // Reset global state for this test
+  const { resetDefaultControllerForTest } = await import("../src/lightpanda.mts");
+  resetDefaultControllerForTest();
+
+  const port = await getFreePort();
+  try {
+    await startLightpanda({
+      command: "definitely-not-lightpanda",
+      port,
+      readyTimeoutMs: 50,
+      probeTimeoutMs: 50,
+    });
+    throw new Error("Should have thrown");
+  } catch {
+    // expected
+  }
+
+  await expect(
+    startLightpanda({
+      command: "definitely-not-lightpanda",
+      port,
+      readyTimeoutMs: 50,
+      probeTimeoutMs: 50,
+    }),
+  ).rejects.toThrow("lightpanda binary not found");
+});

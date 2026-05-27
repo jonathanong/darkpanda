@@ -8,6 +8,11 @@
 **Learning:** When using `http.get` for quick status checks/probes against a server, not opting out of the global keep-alive agent (using `agent: false`) keeps a socket alive in the pool. This open socket holds an active Node.js handle, delaying process exit until the socket times out naturally (typically 4-5 seconds). Furthermore, draining a response body (`res.resume()`) takes more time and memory than immediately destroying the socket (`req.destroy()`) when only the HTTP status code is needed.
 **Action:** Always pass `agent: false` when performing one-off HTTP probes in Node.js to ensure immediate cleanup. Use `req.destroy()` to abort the download early if only headers/status are needed, saving download time and memory.
 
+## 2024-05-27 - Promise Caching Edge Cases
+
+**Learning:** When using Promise caching (memoizing the Promise of an async operation instead of the resolved result to avoid race conditions), you must ensure to `.catch` and clear the cache if the promise rejects. Otherwise, the failure is permanently cached, preventing subsequent retries. Furthermore, be cautious of tests relying on global state, as a cached promise may leak between test cases.
+**Action:** Always include `.catch((err) => { cache = undefined; throw err; })` when implementing Promise caching, and write tests to explicitly verify that cache is cleared on failure.
+
 ## 2024-10-24 - Async singleton initialization
 
 **Learning:** When using singleton patterns for startup processes (like spawning a browser or connecting to a database), checking for an already resolved controller (`if (controller !== undefined)`) is insufficient if the initialization is asynchronous. Concurrent calls will bypass the check and trigger duplicate expensive initializations, which can cause race conditions or duplicate processes.
