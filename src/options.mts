@@ -21,13 +21,11 @@ export function normalizeOptions(options: LightpandaOptions = {}): NormalizedOpt
     logLevel,
     ...(block ? ["--block-private-networks"] : []),
   ];
-  // ⚡ Bolt: Avoid spreading process.env (slow C++ getters) by using Object.create.
-  // This improves normalizeOptions performance significantly.
-  const env = Object.assign(
-    Object.create(process.env),
-    { LIGHTPANDA_DISABLE_TELEMETRY: String(!(options.telemetry ?? false)) },
-    options.env,
-  ) as NodeJS.ProcessEnv;
+  const env = {
+    ...process.env,
+    LIGHTPANDA_DISABLE_TELEMETRY: String(!(options.telemetry ?? false)),
+    ...options.env,
+  };
   return {
     args,
     command: options.command ?? "lightpanda",
