@@ -1,4 +1,6 @@
 import { chmod, readFile, writeFile } from "node:fs/promises";
+import { EventEmitter } from "node:events";
+import net from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -22,6 +24,13 @@ function managerFor(port: number, mode = "ready") {
     shutdownTimeoutMs: 50,
     stdio: "ignore",
   });
+}
+
+function mockSocket() {
+  const socket = new EventEmitter() as any;
+  socket.setTimeout = vi.fn();
+  socket.destroy = vi.fn();
+  return socket;
 }
 
 describe("Lightpanda startup", () => {
@@ -219,5 +228,103 @@ describe("Lightpanda startup", () => {
     );
     await assertStartError("@evil.com", "versionPath must start with a single slash");
     await assertStartError(123, "versionPath must be a string");
+  });
+
+  it("rejects when socket probes timeout", async () => {
+    const port = await getFreePort();
+    const connectSpy = vi.spyOn(net, "connect");
+    const socket = mockSocket();
+
+    connectSpy.mockImplementation(() => {
+      setTimeout(() => {
+        socket.emit("timeout");
+      }, 5);
+      return socket as any;
+    });
+
+    const manager = managerFor(port);
+
+    try {
+      await expect(manager.start({ readyTimeoutMs: 50 })).rejects.toThrow(
+        /Lightpanda not ready after 50ms on 127\.0\.0\.1:\d+/,
+      );
+    } finally {
+      connectSpy.mockRestore();
+    }
+  });
+
+  it("rejects when a socket error arrives after timeout budget", async () => {
+    const port = await getFreePort();
+    const connectSpy = vi.spyOn(net, "connect");
+    const socket = mockSocket();
+
+    connectSpy.mockImplementation(() => {
+      setTimeout(() => {
+        socket.emit("error", new Error("late error"));
+      }, 30);
+      return socket;
+    });
+
+    const manager = managerFor(port);
+
+    try {
+      await expect(manager.start({ readyTimeoutMs: 20 })).rejects.toThrow(
+        new RegExp(`Lightpanda not ready after 20ms on 127\\.0\\.0\\.1:${port}`),
+      );
+    } finally {
+      connectSpy.mockRestore();
+    }
+  });
+
+  it("guards against late socket errors after startup succeeds", async () => {
+    const port = await getFreePort();
+    const connectSpy = vi.spyOn(net, "connect");
+    const socket = mockSocket();
+
+    connectSpy.mockImplementation(() => {
+      queueMicrotask(() => {
+        socket.emit("connect");
+        socket.emit("error", new Error("late"));
+      });
+      return socket as any;
+    });
+
+    const manager = managerFor(port, "hang");
+
+    try {
+      const controller = await manager.start({ readyTimeoutMs: 250 });
+      expect(controller).toMatchObject({
+        cdpUrl: `ws://127.0.0.1:${port}`,
+      });
+      await controller.stop();
+    } finally {
+      connectSpy.mockRestore();
+    }
+  });
+
+  it("ignores late socket timeouts after startup succeeds", async () => {
+    const port = await getFreePort();
+    const connectSpy = vi.spyOn(net, "connect");
+    const socket = mockSocket();
+
+    connectSpy.mockImplementation(() => {
+      queueMicrotask(() => {
+        socket.emit("connect");
+        socket.emit("timeout");
+      });
+      return socket as any;
+    });
+
+    const manager = managerFor(port, "hang");
+
+    try {
+      const controller = await manager.start({ readyTimeoutMs: 250 });
+      expect(controller).toMatchObject({
+        cdpUrl: `ws://127.0.0.1:${port}`,
+      });
+      await controller.stop();
+    } finally {
+      connectSpy.mockRestore();
+    }
   });
 });

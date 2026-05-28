@@ -101,29 +101,52 @@ async function isLightpandaRunning(options: NormalizedOptions): Promise<boolean>
 
 function waitForPort(options: NormalizedOptions): Promise<void> {
   const deadline = Date.now() + options.readyTimeoutMs;
+  const notReadyError = () =>
+    new LightpandaStartError(
+      `Lightpanda not ready after ${options.readyTimeoutMs}ms on ${options.host}:${options.port}`,
+    );
   return new Promise((resolve, reject) => {
-    const attempt = () => {
-      try {
-        const socket = net.connect(options.port, options.host);
-        socket.once("connect", () => {
-          socket.destroy();
-          resolve();
-        });
-        socket.once("error", () => {
-          socket.destroy();
-          if (Date.now() >= deadline) {
-            reject(
-              new LightpandaStartError(
-                `Lightpanda not ready after ${options.readyTimeoutMs}ms on ${options.host}:${options.port}`,
-              ),
-            );
-            return;
-          }
-          setTimeout(attempt, 25).unref();
-        });
-      } catch (err) {
-        reject(err);
+    let completed = false;
+    const finish = (error?: Error) => {
+      if (completed) return;
+      completed = true;
+      if (error === undefined) {
+        resolve();
+      } else {
+        reject(error);
       }
+    };
+
+    const attempt = () => {
+      const timeRemaining = deadline - Date.now();
+      if (timeRemaining <= 0) {
+        finish(notReadyError());
+        return;
+      }
+
+      const socket = net.connect(options.port, options.host);
+
+      // 🛡️ Sentinel: Add socket timeout to prevent indefinite hanging (DoS risk)
+      // if the target host silently drops packets or tarpits the connection.
+      socket.setTimeout(Math.max(1, timeRemaining));
+      socket.once("timeout", () => {
+        socket.destroy();
+        finish(notReadyError());
+      });
+
+      socket.once("connect", () => {
+        socket.destroy();
+        finish();
+      });
+      socket.once("error", () => {
+        socket.destroy();
+        if (completed) return;
+        if (Date.now() >= deadline) {
+          finish(notReadyError());
+          return;
+        }
+        setTimeout(attempt, 25).unref();
+      });
     };
     attempt();
   });
