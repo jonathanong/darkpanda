@@ -101,28 +101,57 @@ async function isLightpandaRunning(options: NormalizedOptions): Promise<boolean>
 
 function waitForPort(options: NormalizedOptions): Promise<void> {
   const deadline = Date.now() + options.readyTimeoutMs;
+  const notReadyError = () =>
+    new LightpandaStartError(
+      `Lightpanda not ready after ${options.readyTimeoutMs}ms on ${options.host}:${options.port}`,
+    );
   return new Promise((resolve, reject) => {
+    let completed = false;
+    const finish = (error?: Error) => {
+      if (completed) return;
+      completed = true;
+      if (error === undefined) {
+        resolve();
+      } else {
+        reject(error);
+      }
+    };
+
     const attempt = () => {
+      const now = Date.now();
+      if (now >= deadline) {
+        finish(notReadyError());
+        return;
+      }
       try {
         const socket = net.connect(options.port, options.host);
+        // 🛡️ Sentinel: Enforce readyTimeoutMs on the socket level to prevent hanging indefinitely
+        // if the network blackholes the connection, avoiding potential Denial of Service (DoS).
+        // Math.max(1, ...) ensures we don't pass 0, which would disable the timeout in Node.js.
+        socket.setTimeout(Math.max(1, deadline - now));
+        socket.once("timeout", () => {
+          finish(notReadyError());
+          socket.destroy(new Error("timeout"));
+        });
         socket.once("connect", () => {
           socket.destroy();
-          resolve();
+          finish();
         });
         socket.once("error", () => {
+          if (completed) return;
           socket.destroy();
           if (Date.now() >= deadline) {
-            reject(
-              new LightpandaStartError(
-                `Lightpanda not ready after ${options.readyTimeoutMs}ms on ${options.host}:${options.port}`,
-              ),
-            );
+            finish(notReadyError());
             return;
           }
           setTimeout(attempt, 25).unref();
         });
-      } catch (err) {
-        reject(err);
+      } catch (error) {
+        if (error instanceof Error) {
+          finish(error);
+        } else {
+          finish(new Error(String(error)));
+        }
       }
     };
     attempt();
