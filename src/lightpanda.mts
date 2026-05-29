@@ -66,13 +66,15 @@ async function isLightpandaRunning(options: NormalizedOptions): Promise<boolean>
     return await new Promise((resolve) => {
       const req = http.get(
         {
+          agent: false, // ⚡ Bolt: disable keep-alive to avoid socket leaks and process hangs
           host: options.host,
           port: options.port,
           path: options.versionPath,
           timeout: options.probeTimeoutMs,
         },
         (res) => {
-          res.resume(); // drain to allow socket reuse/closure
+          // ⚡ Bolt: destroy socket immediately instead of draining body to save download time/memory
+          req.destroy();
           resolve(res.statusCode !== undefined && res.statusCode >= 200 && res.statusCode < 300);
         },
       );
