@@ -194,4 +194,30 @@ describe("Lightpanda startup", () => {
       `Lightpanda not ready after 500ms on 127.0.0.1:${port}`,
     );
   });
+
+  it("throws an error when versionPath is invalid", async () => {
+    const assertStartError = async (versionPath: unknown, message: string): Promise<void> => {
+      let error: unknown;
+
+      try {
+        await createLightpandaManager({
+          versionPath: versionPath as unknown as string,
+        }).start();
+        error = new Error("Expected start() to throw");
+      } catch (err) {
+        error = err;
+      }
+
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toBe(message);
+    };
+
+    await assertStartError("evil.com", "versionPath must start with a single slash");
+    await assertStartError(
+      "//evil.com",
+      "versionPath must start with a single '/' and cannot start with '//'",
+    );
+    await assertStartError("@evil.com", "versionPath must start with a single slash");
+    await assertStartError(123, "versionPath must be a string");
+  });
 });
