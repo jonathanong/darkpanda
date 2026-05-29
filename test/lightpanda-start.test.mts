@@ -194,6 +194,7 @@ describe("Lightpanda startup", () => {
     // we mock net.connect.
     const net = await import("node:net");
     let timeoutConfigured = false;
+    let destroyArgument: unknown;
     let mockedSocket: unknown = null;
     const spy = vi.spyOn(net.default, "connect").mockImplementation(() => {
       const socket = new net.default.Socket();
@@ -207,8 +208,12 @@ describe("Lightpanda startup", () => {
         }
         return socket;
       });
-      vi.spyOn(socket, "destroy").mockImplementation(() => {
+      vi.spyOn(socket, "destroy").mockImplementation((error?: Error) => {
+        destroyArgument = error;
         clearTimeout(timeout);
+        if (error !== undefined) {
+          socket.emit("error", error);
+        }
         return socket;
       });
       socket.on("error", () => {});
@@ -224,6 +229,7 @@ describe("Lightpanda startup", () => {
       expect(
         (mockedSocket as { setTimeout: ReturnType<typeof vi.fn> }).setTimeout,
       ).toHaveBeenCalled();
+      expect(destroyArgument).toBeInstanceOf(Error);
     } finally {
       spy.mockRestore();
     }
