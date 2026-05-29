@@ -195,7 +195,7 @@ describe("Lightpanda startup", () => {
     );
   });
 
-  it("throws an error when versionPath does not start with a single slash", async () => {
+  it("throws an error when versionPath is invalid", async () => {
     const assertStartError = async (versionPath: unknown, message: string): Promise<void> => {
       const error = await createLightpandaManager({
         versionPath: versionPath as unknown as string,
