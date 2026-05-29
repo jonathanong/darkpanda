@@ -17,18 +17,16 @@ export class LightpandaStartError extends Error {
 }
 
 let defaultControllerPromise: Promise<LightpandaController> | undefined;
-// ⚡ Bolt: Memoize the Promise instead of the resolved controller to prevent concurrent calls
-// from triggering redundant process spawns and port probes.
+
+// ⚡ Bolt: Memoize the promise rather than the value to prevent redundant concurrent
+// initialization, avoiding multiple process spawns and HTTP probes.
 export function startLightpanda(options?: LightpandaOptions): Promise<LightpandaController> {
   if (defaultControllerPromise !== undefined) return defaultControllerPromise;
-  const promise = startManagedLightpanda(normalizeOptions(options)).catch((err) => {
-    if (defaultControllerPromise === promise) {
-      defaultControllerPromise = undefined;
-    }
+  defaultControllerPromise = startManagedLightpanda(normalizeOptions(options)).catch((err) => {
+    defaultControllerPromise = undefined;
     throw err;
   });
-  defaultControllerPromise = promise;
-  return promise;
+  return defaultControllerPromise;
 }
 
 export function createLightpandaManager(defaults: LightpandaOptions = {}): LightpandaManager {
@@ -36,16 +34,13 @@ export function createLightpandaManager(defaults: LightpandaOptions = {}): Light
   return {
     start(overrides: LightpandaOptions = {}) {
       if (controllerPromise !== undefined) return controllerPromise;
-      const promise = startManagedLightpanda(
+      controllerPromise = startManagedLightpanda(
         normalizeOptions({ ...defaults, ...overrides }),
       ).catch((err) => {
-        if (controllerPromise === promise) {
-          controllerPromise = undefined;
-        }
+        controllerPromise = undefined;
         throw err;
       });
-      controllerPromise = promise;
-      return promise;
+      return controllerPromise;
     },
   };
 }
@@ -81,15 +76,13 @@ async function isLightpandaRunning(options: NormalizedOptions): Promise<boolean>
     return await new Promise((resolve) => {
       const req = http.get(
         {
-          agent: false, // ⚡ Bolt: disable keep-alive to avoid socket leaks and process hangs
           host: options.host,
           port: options.port,
           path: options.versionPath,
           timeout: options.probeTimeoutMs,
         },
         (res) => {
-          // ⚡ Bolt: destroy socket immediately instead of draining body to save download time/memory
-          req.destroy();
+          res.resume(); // drain to allow socket reuse/closure
           resolve(res.statusCode !== undefined && res.statusCode >= 200 && res.statusCode < 300);
         },
       );
@@ -108,27 +101,23 @@ function waitForPort(options: NormalizedOptions): Promise<void> {
   const deadline = Date.now() + options.readyTimeoutMs;
   return new Promise((resolve, reject) => {
     const attempt = () => {
-      try {
-        const socket = net.connect(options.port, options.host);
-        socket.once("connect", () => {
-          socket.destroy();
-          resolve();
-        });
-        socket.once("error", () => {
-          socket.destroy();
-          if (Date.now() >= deadline) {
-            reject(
-              new LightpandaStartError(
-                `Lightpanda not ready after ${options.readyTimeoutMs}ms on ${options.host}:${options.port}`,
-              ),
-            );
-            return;
-          }
-          setTimeout(attempt, 25).unref();
-        });
-      } catch (err) {
-        reject(err);
-      }
+      const socket = net.connect(options.port, options.host);
+      socket.once("connect", () => {
+        socket.destroy();
+        resolve();
+      });
+      socket.once("error", () => {
+        socket.destroy();
+        if (Date.now() >= deadline) {
+          reject(
+            new LightpandaStartError(
+              `Lightpanda not ready after ${options.readyTimeoutMs}ms on ${options.host}:${options.port}`,
+            ),
+          );
+          return;
+        }
+        setTimeout(attempt, 25).unref();
+      });
     };
     attempt();
   });
