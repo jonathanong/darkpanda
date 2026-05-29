@@ -197,11 +197,16 @@ describe("Lightpanda startup", () => {
 
   it("throws an error when versionPath is invalid", async () => {
     const assertStartError = async (versionPath: unknown, message: string): Promise<void> => {
-      const error = await createLightpandaManager({
-        versionPath: versionPath as unknown as string,
-      })
-        .start()
-        .catch((err) => err);
+      let error: unknown;
+
+      try {
+        await createLightpandaManager({
+          versionPath: versionPath as unknown as string,
+        }).start();
+        error = new Error("Expected start() to throw");
+      } catch (err) {
+        error = err;
+      }
 
       expect(error).toBeInstanceOf(Error);
       expect((error as Error).message).toBe(message);
