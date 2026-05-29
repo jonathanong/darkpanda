@@ -187,6 +187,42 @@ describe("Lightpanda startup", () => {
     );
   });
 
+  it("rejects when the port connection hangs (timeout)", async () => {
+    const port = await getFreePort();
+
+    // To trigger the socket timeout handler without waiting for the actual deadline,
+    // we mock net.connect.
+    const net = await import("node:net");
+    let timeoutConfigured = false;
+    let mockedSocket: unknown = null;
+    const spy = vi.spyOn(net.default, "connect").mockImplementation(() => {
+      const socket = new net.default.Socket();
+      let timeout: ReturnType<typeof setTimeout>;
+      vi.spyOn(socket, "setTimeout").mockImplementation((ms: number) => {
+        timeoutConfigured = ms > 0;
+        if (ms > 0) timeout = setTimeout(() => socket.emit("timeout"), 10);
+        return socket;
+      });
+      vi.spyOn(socket, "destroy").mockImplementation(() => {
+        clearTimeout(timeout);
+        return socket;
+      });
+      socket.on("error", () => {});
+      mockedSocket = socket;
+      return socket as any;
+    });
+
+    try {
+      await expect(managerFor(port, "hang").start()).rejects.toThrow(
+        `Lightpanda not ready after 500ms on 127.0.0.1:${port}`,
+      );
+      expect(timeoutConfigured).toBe(true);
+      expect((mockedSocket as { setTimeout: ReturnType<typeof vi.fn> }).setTimeout).toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it("rejects when the port never opens", async () => {
     const port = await getFreePort();
 
