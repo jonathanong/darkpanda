@@ -84,8 +84,8 @@ async function isLightpandaRunning(options: NormalizedOptions): Promise<boolean>
           timeout: options.probeTimeoutMs,
         },
         (res) => {
-          // ⚡ Bolt: destroy response immediately after headers to avoid background draining.
-          res.destroy();
+          // ⚡ Bolt: destroy the request after headers are available to avoid unbounded
+          // response streaming while still reading status.
           req.destroy();
           resolve(res.statusCode !== undefined && res.statusCode >= 200 && res.statusCode < 300);
         },

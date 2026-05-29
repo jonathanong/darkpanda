@@ -1,4 +1,5 @@
 import { chmod, readFile, writeFile } from "node:fs/promises";
+import http from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -48,6 +49,46 @@ describe("Lightpanda startup", () => {
       });
       await controller.stop();
     });
+  });
+
+  it("abandons version probe body reads after headers", async () => {
+    const destroy = vi.fn();
+    const spy = vi
+      .spyOn(http, "get")
+      .mockImplementation(((_: unknown, callback: (res: http.IncomingMessage) => void) => {
+        const req = {
+          destroy: vi.fn(() => {
+            destroy();
+            return req;
+          }),
+          on: vi.fn(() => req),
+        };
+        const res = {
+          statusCode: 200,
+          destroy: vi.fn(() => res),
+        };
+        callback(res as unknown as http.IncomingMessage);
+        return req as unknown as ReturnType<typeof http.get>;
+      }) as unknown as typeof http.get);
+
+    try {
+      const port = await getFreePort();
+      const controller = await startLightpanda({
+        port,
+        command: "lightpanda",
+        probeTimeoutMs: 25,
+      });
+      expect(controller).toMatchObject({
+        host: "127.0.0.1",
+        port,
+        process: undefined,
+        spawned: false,
+      });
+      expect(destroy).toHaveBeenCalled();
+      await controller.stop();
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it("spawns a process, memoizes the controller, and stops it", async () => {
