@@ -106,7 +106,18 @@ function waitForPort(options: NormalizedOptions): Promise<void> {
       // Math.max(1, ...) ensures we don't pass 0, which would disable the timeout in Node.js.
       socket.setTimeout(Math.max(1, deadline - now));
       socket.once("timeout", () => {
-        socket.destroy(new Error("timeout"));
+        // Must clear error handler so we don't trigger it after timeout
+        socket.removeAllListeners("error");
+        socket.destroy();
+        if (Date.now() >= deadline) {
+          reject(
+            new LightpandaStartError(
+              `Lightpanda not ready after ${options.readyTimeoutMs}ms on ${options.host}:${options.port}`,
+            ),
+          );
+          return;
+        }
+        setTimeout(attempt, 25).unref();
       });
       socket.once("connect", () => {
         socket.destroy();

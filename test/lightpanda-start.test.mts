@@ -196,17 +196,25 @@ describe("Lightpanda startup", () => {
     const spy = vi.spyOn(net.default, "connect").mockImplementation(() => {
       const socket = new net.default.Socket();
       let timeout: ReturnType<typeof setTimeout>;
+      let errorTimeout: ReturnType<typeof setTimeout>;
+      let destroyed = false;
       socket.setTimeout = (ms: number) => {
-        if (ms > 0) timeout = setTimeout(() => socket.emit("timeout"), 10);
+        if (ms > 0 && !destroyed) timeout = setTimeout(() => socket.emit("timeout"), 10);
         return socket;
       };
+      // Provide a default error listener to prevent unhandled exception
       socket.on("error", () => {});
       socket.destroy = () => {
+        destroyed = true;
         clearTimeout(timeout);
+        clearTimeout(errorTimeout);
         return socket;
       };
       // We must eventually emit an error if no timeout is set, otherwise retries loop forever
-      setTimeout(() => socket.emit("error", new Error("mock")), 20);
+      errorTimeout = setTimeout(() => {
+        if (!destroyed && socket.listenerCount("error") > 0)
+          socket.emit("error", new Error("mock"));
+      }, 20);
       return socket as any;
     });
 
@@ -225,5 +233,61 @@ describe("Lightpanda startup", () => {
     await expect(managerFor(port, "hang").start()).rejects.toThrow(
       `Lightpanda not ready after 500ms on 127.0.0.1:${port}`,
     );
+  });
+
+  it("rejects when a timeout occurs exactly on the deadline", async () => {
+    const port = await getFreePort();
+
+    const net = await import("node:net");
+    const spy = vi.spyOn(net.default, "connect").mockImplementation(() => {
+      const socket = new net.default.Socket();
+      socket.setTimeout = () => socket;
+      socket.on("error", () => {});
+      socket.destroy = () => socket;
+
+      // We want to trigger a timeout right after the deadline.
+      // 500ms is the deadline, plus a bit of padding.
+      setTimeout(() => {
+        socket.emit("timeout");
+      }, 550);
+
+      return socket as any;
+    });
+
+    try {
+      await expect(managerFor(port, "hang").start()).rejects.toThrow(
+        `Lightpanda not ready after 500ms on 127.0.0.1:${port}`,
+      );
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("rejects when an error occurs exactly on the deadline", async () => {
+    const port = await getFreePort();
+
+    const net = await import("node:net");
+    const spy = vi.spyOn(net.default, "connect").mockImplementation(() => {
+      const socket = new net.default.Socket();
+      socket.setTimeout = () => socket;
+      socket.on("error", () => {});
+      socket.destroy = () => socket;
+
+      // We want to trigger an error right after the deadline.
+      // 500ms is the deadline, plus a bit of padding.
+      setTimeout(() => {
+        socket.emit("error", new Error("mock error"));
+      }, 550);
+
+      return socket as any;
+    });
+
+    try {
+      await expect(managerFor(port, "hang").start()).rejects.toThrow(
+        `Lightpanda not ready after 500ms on 127.0.0.1:${port}`,
+      );
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
