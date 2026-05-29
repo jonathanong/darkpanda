@@ -196,20 +196,23 @@ describe("Lightpanda startup", () => {
   });
 
   it("throws an error when versionPath does not start with a single slash", async () => {
-    await expect(createLightpandaManager({ versionPath: "evil.com" }).start()).rejects.toThrow(
-      "versionPath must start with a single slash",
-    );
+    const assertStartError = async (versionPath: unknown, message: string): Promise<void> => {
+      const error = await createLightpandaManager({
+        versionPath: versionPath as unknown as string,
+      })
+        .start()
+        .catch((err) => err);
 
-    await expect(createLightpandaManager({ versionPath: "//evil.com" }).start()).rejects.toThrow(
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toBe(message);
+    };
+
+    await assertStartError("evil.com", "versionPath must start with a single slash");
+    await assertStartError(
+      "//evil.com",
       "versionPath must start with a single '/' and cannot start with '//'",
     );
-
-    await expect(createLightpandaManager({ versionPath: "@evil.com" }).start()).rejects.toThrow(
-      "versionPath must start with a single slash",
-    );
-
-    await expect(
-      createLightpandaManager({ versionPath: 123 as unknown as string }).start(),
-    ).rejects.toThrow("versionPath must be a string");
+    await assertStartError("@evil.com", "versionPath must start with a single slash");
+    await assertStartError(123, "versionPath must be a string");
   });
 });
