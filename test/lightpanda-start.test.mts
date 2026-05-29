@@ -200,7 +200,11 @@ describe("Lightpanda startup", () => {
       let timeout: ReturnType<typeof setTimeout>;
       vi.spyOn(socket, "setTimeout").mockImplementation((ms: number) => {
         timeoutConfigured = ms > 0;
-        if (ms > 0) timeout = setTimeout(() => socket.emit("timeout"), 10);
+        if (ms > 0) {
+          timeout = setTimeout(() => {
+            socket.emit("timeout");
+          }, 10);
+        }
         return socket;
       });
       vi.spyOn(socket, "destroy").mockImplementation(() => {
@@ -217,7 +221,9 @@ describe("Lightpanda startup", () => {
         `Lightpanda not ready after 500ms on 127.0.0.1:${port}`,
       );
       expect(timeoutConfigured).toBe(true);
-      expect((mockedSocket as { setTimeout: ReturnType<typeof vi.fn> }).setTimeout).toHaveBeenCalled();
+      expect(
+        (mockedSocket as { setTimeout: ReturnType<typeof vi.fn> }).setTimeout,
+      ).toHaveBeenCalled();
     } finally {
       spy.mockRestore();
     }
