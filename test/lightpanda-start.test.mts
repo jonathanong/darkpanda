@@ -2,10 +2,38 @@ import { chmod, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createLightpandaManager, startLightpanda } from "../src/lightpanda.mts";
+import {
+  createLightpandaManager,
+  resetDefaultControllerForTest,
+  startLightpanda,
+} from "../src/lightpanda.mts";
 import { getFreePort, withVersionServer } from "./helpers.mts";
 
 const fixture = fileURLToPath(new URL("./fixtures/fake-lightpanda.mjs", import.meta.url));
+const flakyFixture = fileURLToPath(
+  new URL("./fixtures/fake-lightpanda-flaky.mjs", import.meta.url),
+);
+
+function flakyStatePath(port: number) {
+  return join(tmpdir(), `darkpanda-flaky-${port}.state`);
+}
+
+function flakyStartOptions(port: number, script: string, state: string) {
+  return {
+    args: [script],
+    command: process.execPath,
+    env: {
+      DARKPANDA_FAIL_STATE_PATH: state,
+      FAKE_LIGHTPANDA_HOST: "127.0.0.1",
+      FAKE_LIGHTPANDA_PORT: String(port),
+    },
+    port,
+    probeTimeoutMs: 50,
+    readyTimeoutMs: 500,
+    shutdownTimeoutMs: 50,
+    stdio: "ignore" as const,
+  };
+}
 
 function managerFor(port: number, mode = "ready") {
   return createLightpandaManager({
@@ -194,51 +222,70 @@ describe("Lightpanda startup", () => {
       `Lightpanda not ready after 500ms on 127.0.0.1:${port}`,
     );
   });
-});
 
-it("clears the cache on start failure to allow subsequent retries", async () => {
-  const port = await getFreePort();
-  const manager = createLightpandaManager({
-    command: "definitely-not-lightpanda",
-    port,
-    readyTimeoutMs: 50,
-    probeTimeoutMs: 50,
+  it("shares a startup when manager starts are concurrent", async () => {
+    const port = await getFreePort();
+    const manager = managerFor(port);
+
+    const [first, second] = await Promise.all([manager.start(), manager.start()]);
+
+    expect(first).toBe(second);
+    expect(first.spawned).toBe(true);
+    await first.stop();
   });
 
-  try {
-    await manager.start();
-    throw new Error("Should have thrown");
-  } catch {
-    // expected
-  }
-
-  await expect(manager.start()).rejects.toThrow("lightpanda binary not found");
-});
-
-it("clears the global default controller cache on start failure to allow subsequent retries", async () => {
-  // Reset global state for this test
-  const { resetDefaultControllerForTest } = await import("../src/lightpanda.mts");
-  resetDefaultControllerForTest();
-
-  const port = await getFreePort();
-  try {
-    await startLightpanda({
-      command: "definitely-not-lightpanda",
+  it("shares a startup when startLightpanda calls are concurrent", async () => {
+    resetDefaultControllerForTest();
+    const port = await getFreePort();
+    const options = {
+      args: [fixture],
+      command: process.execPath,
+      env: {
+        FAKE_LIGHTPANDA_HOST: "127.0.0.1",
+        FAKE_LIGHTPANDA_MODE: "ready",
+        FAKE_LIGHTPANDA_PORT: String(port),
+      },
       port,
-      readyTimeoutMs: 50,
       probeTimeoutMs: 50,
+      readyTimeoutMs: 500,
+      shutdownTimeoutMs: 50,
+      stdio: "ignore" as const,
+    };
+    const [first, second] = await Promise.all([startLightpanda(options), startLightpanda(options)]);
+
+    expect(first).toBe(second);
+    expect(first.spawned).toBe(true);
+    await first.stop();
+  });
+
+  it("clears the cache on start failure to allow subsequent retries", async () => {
+    const port = await getFreePort();
+    const state = flakyStatePath(port);
+    await writeFile(state, "0", "utf8");
+    const manager = createLightpandaManager({
+      ...flakyStartOptions(port, flakyFixture, state),
     });
-    throw new Error("Should have thrown");
-  } catch {
-    // expected
-  }
 
-  await expect(
-    startLightpanda({
-      command: "definitely-not-lightpanda",
-      port,
-      readyTimeoutMs: 50,
-      probeTimeoutMs: 50,
-    }),
-  ).rejects.toThrow("lightpanda binary not found");
+    await expect(manager.start()).rejects.toThrow(
+      `Lightpanda exited with code 23 before port 127.0.0.1:${port} was ready`,
+    );
+    const controller = await manager.start();
+    expect(controller.spawned).toBe(true);
+    await controller.stop();
+  });
+
+  it("clears the cache on start failure to allow subsequent retries (global)", async () => {
+    resetDefaultControllerForTest();
+    const port = await getFreePort();
+    const state = flakyStatePath(port);
+    await writeFile(state, "0", "utf8");
+    const options = flakyStartOptions(port, flakyFixture, state);
+
+    await expect(startLightpanda(options)).rejects.toThrow(
+      `Lightpanda exited with code 23 before port 127.0.0.1:${port} was ready`,
+    );
+    const controller = await startLightpanda(options);
+    expect(controller.spawned).toBe(true);
+    await controller.stop();
+  });
 });

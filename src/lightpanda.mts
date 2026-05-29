@@ -55,7 +55,6 @@ export function createLightpandaManager(defaults: LightpandaOptions = {}): Light
         },
       );
       return controller;
-
     },
   };
 }
