@@ -248,6 +248,11 @@ describe("Lightpanda startup", () => {
       await expect(manager.start({ readyTimeoutMs: 50 })).rejects.toThrow(
         /Lightpanda not ready after 50ms on 127\.0\.0\.1:\d+/,
       );
+      expect(socket.setTimeout).toHaveBeenCalledOnce();
+      expect(socket.setTimeout).toHaveBeenCalledWith(expect.any(Number));
+      const timeoutMs = vi.mocked(socket.setTimeout).mock.calls[0][0] as number;
+      expect(timeoutMs).toBeGreaterThan(0);
+      expect(timeoutMs).toBeLessThanOrEqual(50);
     } finally {
       connectSpy.mockRestore();
     }
