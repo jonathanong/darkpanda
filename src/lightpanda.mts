@@ -74,16 +74,18 @@ async function isLightpandaRunning(options: NormalizedOptions): Promise<boolean>
   // which saves ~40-100ms on the initial probe when starting Lightpanda.
   try {
     return await new Promise((resolve) => {
+      const agent = new http.Agent({ keepAlive: false });
       const req = http.get(
         {
-          agent: false, // ⚡ Bolt: disable keep-alive to avoid socket leaks and process hangs
+          agent, // use a one-off non-keep-alive agent to avoid open socket reuse
           host: options.host,
           port: options.port,
           path: options.versionPath,
           timeout: options.probeTimeoutMs,
         },
         (res) => {
-          // ⚡ Bolt: destroy socket immediately instead of draining body to save download time/memory
+          // ⚡ Bolt: destroy response immediately after headers to avoid background draining.
+          res.destroy();
           req.destroy();
           resolve(res.statusCode !== undefined && res.statusCode >= 200 && res.statusCode < 300);
         },
@@ -92,6 +94,9 @@ async function isLightpandaRunning(options: NormalizedOptions): Promise<boolean>
       req.on("timeout", () => {
         req.destroy();
         resolve(false);
+      });
+      req.on("close", () => {
+        agent.destroy();
       });
     });
   } catch {
@@ -138,8 +143,8 @@ function waitForPort(options: NormalizedOptions): Promise<void> {
           finish();
         });
         socket.once("error", () => {
-          socket.destroy();
           if (completed) return;
+          socket.destroy();
           if (Date.now() >= deadline) {
             finish(notReadyError());
             return;
