@@ -16,31 +16,21 @@ export class LightpandaStartError extends Error {
   }
 }
 
-// ⚡ Bolt: Memoize the Promise instead of the resolved controller to prevent concurrent calls
-// from triggering redundant process spawns and port probes.
-let defaultControllerPromise: Promise<LightpandaController> | undefined;
+let defaultController: LightpandaController | undefined;
 
-export function startLightpanda(options?: LightpandaOptions): Promise<LightpandaController> {
-  if (defaultControllerPromise !== undefined) return defaultControllerPromise;
-  defaultControllerPromise = startManagedLightpanda(normalizeOptions(options)).catch((err) => {
-    defaultControllerPromise = undefined;
-    throw err;
-  });
-  return defaultControllerPromise;
+export async function startLightpanda(options?: LightpandaOptions): Promise<LightpandaController> {
+  if (defaultController !== undefined) return defaultController;
+  defaultController = await startManagedLightpanda(normalizeOptions(options));
+  return defaultController;
 }
 
 export function createLightpandaManager(defaults: LightpandaOptions = {}): LightpandaManager {
-  let controllerPromise: Promise<LightpandaController> | undefined;
+  let controller: LightpandaController | undefined;
   return {
-    start(overrides: LightpandaOptions = {}) {
-      if (controllerPromise !== undefined) return controllerPromise;
-      controllerPromise = startManagedLightpanda(
-        normalizeOptions({ ...defaults, ...overrides }),
-      ).catch((err) => {
-        controllerPromise = undefined;
-        throw err;
-      });
-      return controllerPromise;
+    async start(overrides: LightpandaOptions = {}) {
+      if (controller !== undefined) return controller;
+      controller = await startManagedLightpanda(normalizeOptions({ ...defaults, ...overrides }));
+      return controller;
     },
   };
 }
@@ -74,19 +64,15 @@ async function isLightpandaRunning(options: NormalizedOptions): Promise<boolean>
   // which saves ~40-100ms on the initial probe when starting Lightpanda.
   try {
     return await new Promise((resolve) => {
-      const agent = new http.Agent({ keepAlive: false });
       const req = http.get(
         {
-          agent, // use a one-off non-keep-alive agent to avoid open socket reuse
           host: options.host,
           port: options.port,
           path: options.versionPath,
           timeout: options.probeTimeoutMs,
         },
         (res) => {
-          // ⚡ Bolt: destroy the request after headers are available to avoid unbounded
-          // response streaming while still reading status.
-          req.destroy();
+          res.resume(); // drain to allow socket reuse/closure
           resolve(res.statusCode !== undefined && res.statusCode >= 200 && res.statusCode < 300);
         },
       );
@@ -94,9 +80,6 @@ async function isLightpandaRunning(options: NormalizedOptions): Promise<boolean>
       req.on("timeout", () => {
         req.destroy();
         resolve(false);
-      });
-      req.on("close", () => {
-        agent.destroy();
       });
     });
   } catch {
@@ -106,58 +89,41 @@ async function isLightpandaRunning(options: NormalizedOptions): Promise<boolean>
 
 function waitForPort(options: NormalizedOptions): Promise<void> {
   const deadline = Date.now() + options.readyTimeoutMs;
-  const notReadyError = () =>
-    new LightpandaStartError(
-      `Lightpanda not ready after ${options.readyTimeoutMs}ms on ${options.host}:${options.port}`,
-    );
   return new Promise((resolve, reject) => {
-    let completed = false;
-    const finish = (error?: Error) => {
-      if (completed) return;
-      completed = true;
-      if (error === undefined) {
-        resolve();
-      } else {
-        reject(error);
-      }
-    };
-
     const attempt = () => {
       const now = Date.now();
       if (now >= deadline) {
-        finish(notReadyError());
+        reject(
+          new LightpandaStartError(
+            `Lightpanda not ready after ${options.readyTimeoutMs}ms on ${options.host}:${options.port}`,
+          ),
+        );
         return;
       }
-      try {
-        const socket = net.connect(options.port, options.host);
-        // 🛡️ Sentinel: Enforce readyTimeoutMs on the socket level to prevent hanging indefinitely
-        // if the network blackholes the connection, avoiding potential Denial of Service (DoS).
-        // Math.max(1, ...) ensures we don't pass 0, which would disable the timeout in Node.js.
-        socket.setTimeout(Math.max(1, deadline - now));
-        socket.once("timeout", () => {
-          finish(notReadyError());
-          socket.destroy(new Error("timeout"));
-        });
-        socket.once("connect", () => {
-          socket.destroy();
-          finish();
-        });
-        socket.once("error", () => {
-          if (completed) return;
-          socket.destroy();
-          if (Date.now() >= deadline) {
-            finish(notReadyError());
-            return;
-          }
-          setTimeout(attempt, 25).unref();
-        });
-      } catch (error) {
-        if (error instanceof Error) {
-          finish(error);
-        } else {
-          finish(new Error(String(error)));
+      const socket = net.connect(options.port, options.host);
+      // 🛡️ Sentinel: Enforce readyTimeoutMs on the socket level to prevent hanging indefinitely
+      // if the network blackholes the connection, avoiding potential Denial of Service (DoS).
+      // Math.max(1, ...) ensures we don't pass 0, which would disable the timeout in Node.js.
+      socket.setTimeout(Math.max(1, deadline - now));
+      socket.once("timeout", () => {
+        socket.destroy(new Error("timeout"));
+      });
+      socket.once("connect", () => {
+        socket.destroy();
+        resolve();
+      });
+      socket.once("error", () => {
+        socket.destroy();
+        if (Date.now() >= deadline) {
+          reject(
+            new LightpandaStartError(
+              `Lightpanda not ready after ${options.readyTimeoutMs}ms on ${options.host}:${options.port}`,
+            ),
+          );
+          return;
         }
-      }
+        setTimeout(attempt, 25).unref();
+      });
     };
     attempt();
   });
