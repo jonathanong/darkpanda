@@ -18,6 +18,15 @@ function flakyStatePath(port: number) {
   return join(tmpdir(), `darkpanda-flaky-${port}.state`);
 }
 
+function startupCounterPath(port: number) {
+  return join(tmpdir(), `darkpanda-startup-counter-${port}.txt`);
+}
+
+async function getStartupCount(path: string) {
+  const raw = await readFile(path, "utf8");
+  return raw.split(/\r?\n/).filter((line) => line.length > 0).length;
+}
+
 function flakyStartOptions(port: number, script: string, state: string) {
   return {
     args: [script],
@@ -35,7 +44,7 @@ function flakyStartOptions(port: number, script: string, state: string) {
   };
 }
 
-function managerFor(port: number, mode = "ready") {
+function managerFor(port: number, mode = "ready", env: Record<string, string> = {}) {
   return createLightpandaManager({
     args: [fixture],
     command: process.execPath,
@@ -43,6 +52,7 @@ function managerFor(port: number, mode = "ready") {
       FAKE_LIGHTPANDA_HOST: "127.0.0.1",
       FAKE_LIGHTPANDA_MODE: mode,
       FAKE_LIGHTPANDA_PORT: String(port),
+      ...env,
     },
     port,
     probeTimeoutMs: 50,
@@ -225,11 +235,16 @@ describe("Lightpanda startup", () => {
 
   it("shares a startup when manager starts are concurrent", async () => {
     const port = await getFreePort();
-    const manager = managerFor(port);
+    const startupCounter = startupCounterPath(port);
+    const manager = managerFor(port, "ready", {
+      LIGHTPANDA_STARTUP_COUNTER_PATH: startupCounter,
+      LIGHTPANDA_STARTUP_DELAY_MS: "75",
+    });
 
     const [first, second] = await Promise.all([manager.start(), manager.start()]);
 
     expect(first).toBe(second);
+    expect(await getStartupCount(startupCounter)).toBe(1);
     expect(first.spawned).toBe(true);
     await first.stop();
   });
@@ -237,6 +252,7 @@ describe("Lightpanda startup", () => {
   it("shares a startup when startLightpanda calls are concurrent", async () => {
     resetDefaultControllerForTest();
     const port = await getFreePort();
+    const startupCounter = startupCounterPath(port);
     const options = {
       args: [fixture],
       command: process.execPath,
@@ -244,6 +260,8 @@ describe("Lightpanda startup", () => {
         FAKE_LIGHTPANDA_HOST: "127.0.0.1",
         FAKE_LIGHTPANDA_MODE: "ready",
         FAKE_LIGHTPANDA_PORT: String(port),
+        LIGHTPANDA_STARTUP_COUNTER_PATH: startupCounter,
+        LIGHTPANDA_STARTUP_DELAY_MS: "75",
       },
       port,
       probeTimeoutMs: 50,
@@ -254,6 +272,7 @@ describe("Lightpanda startup", () => {
     const [first, second] = await Promise.all([startLightpanda(options), startLightpanda(options)]);
 
     expect(first).toBe(second);
+    expect(await getStartupCount(startupCounter)).toBe(1);
     expect(first.spawned).toBe(true);
     await first.stop();
   });
