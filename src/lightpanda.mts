@@ -138,8 +138,8 @@ function waitForPort(options: NormalizedOptions): Promise<void> {
           finish();
         });
         socket.once("error", () => {
-          if (completed) return;
           socket.destroy();
+          if (completed) return;
           if (Date.now() >= deadline) {
             finish(notReadyError());
             return;
