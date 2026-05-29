@@ -159,7 +159,7 @@ function waitForPort(options: NormalizedOptions): Promise<void> {
         }
       }
     };
-      attempt();
+    attempt();
   });
 }
 

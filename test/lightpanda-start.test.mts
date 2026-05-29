@@ -53,31 +53,36 @@ describe("Lightpanda startup", () => {
 
   it("abandons version probe body reads after headers", async () => {
     const destroy = vi.fn();
-    const spy = vi
-      .spyOn(http, "get")
-      .mockImplementation(((_: unknown, callback: (res: http.IncomingMessage) => void) => {
-        const req = {
-          destroy: vi.fn(() => {
-            destroy();
-            return req;
-          }),
-          on: vi.fn(() => req),
-        };
-        const res = {
-          statusCode: 200,
-          destroy: vi.fn(() => res),
-        };
-        callback(res as unknown as http.IncomingMessage);
-        return req as unknown as ReturnType<typeof http.get>;
-      }) as unknown as typeof http.get);
+    const spy = vi.spyOn(http, "get") as any;
+    spy.mockImplementation((...args: unknown[]) => {
+      const callback = args.at(-1);
+      const req = {
+        destroy: vi.fn(() => {
+          destroy();
+          return req;
+        }),
+        on: vi.fn(() => req),
+      };
+      const res = {
+        statusCode: 200,
+        destroy: vi.fn(() => res),
+      };
+      if (typeof callback === "function") {
+        Promise.resolve().then(() => {
+          callback(res as unknown as http.IncomingMessage);
+        });
+      }
+      return req as unknown as ReturnType<typeof http.get>;
+    });
 
     try {
       const port = await getFreePort();
-      const controller = await startLightpanda({
+      const manager = createLightpandaManager({
         port,
         command: "lightpanda",
         probeTimeoutMs: 25,
       });
+      const controller = await manager.start();
       expect(controller).toMatchObject({
         host: "127.0.0.1",
         port,
