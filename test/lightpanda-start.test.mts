@@ -194,4 +194,22 @@ describe("Lightpanda startup", () => {
       `Lightpanda not ready after 500ms on 127.0.0.1:${port}`,
     );
   });
+
+  it("throws an error when versionPath does not start with a single slash", async () => {
+    await expect(createLightpandaManager({ versionPath: "evil.com" }).start()).rejects.toThrow(
+      "versionPath must start with a single slash",
+    );
+
+    await expect(createLightpandaManager({ versionPath: "//evil.com" }).start()).rejects.toThrow(
+      "versionPath must start with a single slash",
+    );
+
+    await expect(createLightpandaManager({ versionPath: "@evil.com" }).start()).rejects.toThrow(
+      "versionPath must start with a single slash",
+    );
+
+    await expect(
+      createLightpandaManager({ versionPath: 123 as unknown as string }).start(),
+    ).rejects.toThrow("versionPath must be a string");
+  });
 });
