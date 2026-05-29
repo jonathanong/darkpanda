@@ -124,29 +124,33 @@ function waitForPort(options: NormalizedOptions): Promise<void> {
         return;
       }
 
-      const socket = net.connect(options.port, options.host);
+      try {
+        const socket = net.connect(options.port, options.host);
 
-      // 🛡️ Sentinel: Add socket timeout to prevent indefinite hanging (DoS risk)
-      // if the target host silently drops packets or tarpits the connection.
-      socket.setTimeout(Math.max(1, timeRemaining));
-      socket.once("timeout", () => {
-        socket.destroy();
-        finish(notReadyError());
-      });
-
-      socket.once("connect", () => {
-        socket.destroy();
-        finish();
-      });
-      socket.once("error", () => {
-        socket.destroy();
-        if (completed) return;
-        if (Date.now() >= deadline) {
+        // 🛡️ Sentinel: Add socket timeout to prevent indefinite hanging (DoS risk)
+        // if the target host silently drops packets or tarpits the connection.
+        socket.setTimeout(Math.max(1, timeRemaining));
+        socket.once("timeout", () => {
+          socket.destroy();
           finish(notReadyError());
-          return;
-        }
-        setTimeout(attempt, 25).unref();
-      });
+        });
+
+        socket.once("connect", () => {
+          socket.destroy();
+          finish();
+        });
+        socket.once("error", () => {
+          socket.destroy();
+          if (completed) return;
+          if (Date.now() >= deadline) {
+            finish(notReadyError());
+            return;
+          }
+          setTimeout(attempt, 25).unref();
+        });
+      } catch (err) {
+        finish(err as Error);
+      }
     };
     attempt();
   });
