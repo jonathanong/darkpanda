@@ -201,7 +201,7 @@ describe("Lightpanda startup", () => {
     );
 
     await expect(createLightpandaManager({ versionPath: "//evil.com" }).start()).rejects.toThrow(
-      "versionPath must start with a single slash",
+      "versionPath must start with a single '/' and cannot start with '//'",
     );
 
     await expect(createLightpandaManager({ versionPath: "@evil.com" }).start()).rejects.toThrow(
