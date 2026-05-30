@@ -204,6 +204,47 @@ describe("Lightpanda startup", () => {
     );
   });
 
+  it("aborts when the abort signal is triggered during wait with an active socket", async () => {
+    const port = await getFreePort();
+
+    const connectSpy = vi.spyOn(net, "connect");
+    let exposedSocket: any;
+    connectSpy.mockImplementation(() => {
+      exposedSocket = new EventEmitter() as any;
+      exposedSocket.setTimeout = vi.fn();
+      exposedSocket.destroy = vi.fn();
+      // Don't emit anything so it hangs in the socket state
+      return exposedSocket as any;
+    });
+
+    try {
+      // "signal-exit" fixture exits after 25ms which triggers the abort logic naturally via startupError
+      const manager = managerFor(port, "signal-exit");
+      const p = manager.start({ readyTimeoutMs: 500 });
+
+      await expect(p).rejects.toThrow(/Lightpanda exited with signal SIGTERM/);
+      expect(exposedSocket.destroy).toHaveBeenCalled();
+    } finally {
+      connectSpy.mockRestore();
+    }
+  });
+
+  it("handles net.connect throwing synchronously (missing socket)", async () => {
+    const port = await getFreePort();
+    const manager = managerFor(port, "hang");
+
+    const connectSpy = vi.spyOn(net, "connect");
+    connectSpy.mockImplementation(() => {
+      throw new Error("sync error");
+    });
+
+    try {
+      await expect(manager.start({ readyTimeoutMs: 50 })).rejects.toThrow("sync error");
+    } finally {
+      connectSpy.mockRestore();
+    }
+  });
+
   it("throws an error when versionPath is invalid", async () => {
     const assertStartError = async (versionPath: unknown, message: string): Promise<void> => {
       let error: unknown;
