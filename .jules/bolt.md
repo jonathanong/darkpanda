@@ -12,3 +12,8 @@
 
 **Learning:** When using singleton patterns for startup processes (like spawning a browser or connecting to a database), checking for an already resolved controller (`if (controller !== undefined)`) is insufficient if the initialization is asynchronous. Concurrent calls will bypass the check and trigger duplicate expensive initializations, which can cause race conditions or duplicate processes.
 **Action:** Always memoize the `Promise` of the initialization rather than the resolved value. Remember to handle rejections by clearing the promise so subsequent attempts can retry instead of caching a permanently broken state.
+
+## 2024-12-19 - Concurrent Promises and Background Resource Leaks
+
+**Learning:** When using `Promise.race` for concurrent tasks where one promise is expected to resolve/reject first (such as port polling vs. process error streams), the "losing" promises do not automatically stop running. In a port polling scenario, this can lead to orphaned timers (`setTimeout`) and socket connection attempts silently running in the background, consuming resources and potentially causing Node.js to stay alive unexpectedly.
+**Action:** Always use an `AbortController` alongside `Promise.race` for concurrent background tasks. Call `abortController.abort()` in a `finally` block to actively cancel any pending or losing operations (like clearing timers and destroying active sockets) as soon as the race concludes.
