@@ -12,3 +12,8 @@
 
 **Learning:** When using singleton patterns for startup processes (like spawning a browser or connecting to a database), checking for an already resolved controller (`if (controller !== undefined)`) is insufficient if the initialization is asynchronous. Concurrent calls will bypass the check and trigger duplicate expensive initializations, which can cause race conditions or duplicate processes.
 **Action:** Always memoize the `Promise` of the initialization rather than the resolved value. Remember to handle rejections by clearing the promise so subsequent attempts can retry instead of caching a permanently broken state.
+
+## 2024-10-18 - Promise.race actively leaking background work
+
+**Learning:** Promise.race does not actively cancel the losing promises. If the losing promise involves recurring async operations (like socket polling), it will continue running in the background, consuming resources and causing node processes to potentially hang.
+**Action:** When using Promise.race with ongoing background operations, always pass an AbortSignal to actively clean up resources and cancel the losing branch when the race resolves or rejects early.

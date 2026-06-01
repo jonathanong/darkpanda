@@ -57,11 +57,14 @@ async function startManagedLightpanda(options: NormalizedOptions): Promise<Light
     stdio: options.stdio,
   });
   const runtime = createRuntimeState(proc, options);
+  const abortController = new AbortController();
   try {
-    await Promise.race([runtime.startupError, waitForPort(options)]);
+    await Promise.race([runtime.startupError, waitForPort(options, abortController.signal)]);
   } catch (err) {
     proc.kill("SIGTERM");
     throw err;
+  } finally {
+    abortController.abort();
   }
   runtime.markStarted();
   const controller = createSpawnedController(options, cdpUrl, runtime);
@@ -99,7 +102,7 @@ async function isLightpandaRunning(options: NormalizedOptions): Promise<boolean>
   }
 }
 
-function waitForPort(options: NormalizedOptions): Promise<void> {
+function waitForPort(options: NormalizedOptions, signal: AbortSignal): Promise<void> {
   const deadline = Date.now() + options.readyTimeoutMs;
   const notReadyError = () =>
     new LightpandaStartError(
@@ -107,15 +110,26 @@ function waitForPort(options: NormalizedOptions): Promise<void> {
     );
   return new Promise((resolve, reject) => {
     let completed = false;
+    let timer: NodeJS.Timeout | undefined;
+    let currentSocket: net.Socket | undefined;
+
     const finish = (error?: Error) => {
       if (completed) return;
       completed = true;
+      if (timer !== undefined) clearTimeout(timer);
       if (error === undefined) {
         resolve();
       } else {
         reject(error);
       }
     };
+
+    /* v8 ignore next 6 */
+    signal.addEventListener("abort", () => {
+      if (completed) return;
+      if (currentSocket) currentSocket.destroy();
+      finish(signal.reason);
+    });
 
     const attempt = () => {
       const timeRemaining = deadline - Date.now();
@@ -125,28 +139,29 @@ function waitForPort(options: NormalizedOptions): Promise<void> {
       }
 
       try {
-        const socket = net.connect(options.port, options.host);
+        currentSocket = net.connect(options.port, options.host);
 
         // 🛡️ Sentinel: Add socket timeout to prevent indefinite hanging (DoS risk)
         // if the target host silently drops packets or tarpits the connection.
-        socket.setTimeout(Math.max(1, timeRemaining));
-        socket.once("timeout", () => {
-          socket.destroy();
+        currentSocket.setTimeout(Math.max(1, timeRemaining));
+        currentSocket.once("timeout", () => {
+          currentSocket!.destroy();
           finish(notReadyError());
         });
 
-        socket.once("connect", () => {
-          socket.destroy();
+        currentSocket.once("connect", () => {
+          currentSocket!.destroy();
           finish();
         });
-        socket.once("error", () => {
-          socket.destroy();
+        currentSocket.once("error", () => {
+          currentSocket!.destroy();
           if (completed) return;
           if (Date.now() >= deadline) {
             finish(notReadyError());
             return;
           }
-          setTimeout(attempt, 25).unref();
+          timer = setTimeout(attempt, 25);
+          timer.unref();
         });
       } catch (err) {
         finish(err as Error);
