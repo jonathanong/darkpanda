@@ -13,3 +13,11 @@
 **Learning:** When writing polling or retry mechanisms using `setTimeout` inside a `Promise`, exceptions thrown synchronously during the `setTimeout` callback will _not_ be caught by the Promise executor. They must be explicitly wrapped in a `try/catch` block that rejects the Promise.
 
 **Prevention:** Always wrap all operations inside a `setTimeout` callback with a `try/catch` if they belong to a `Promise` and can potentially throw synchronous exceptions (especially external network API calls like `net.connect` or `http.get`), and explicitly call `reject(err)`.
+
+## 2024-05-28 - Resource Leaks from Uncancelled Background Tasks in Promise Races
+
+**Vulnerability:** The `startManagedLightpanda` function used `Promise.race([runtime.startupError, waitForPort(options)])` to wait for either the process to error/exit or the port to become ready. If the process exited early (`startupError` won the race), the `waitForPort` promise continued executing in the background, creating timers, socket connections, and potentially throwing unhandled errors later.
+
+**Learning:** When using `Promise.race` with ongoing background tasks (like polling loops or network requests), the losing promises are not automatically cancelled. They continue to consume resources and can cause unexpected side effects (like unhandled rejections or socket leaks) after the main operation has finished.
+
+**Prevention:** Always use an `AbortController` when racing promises that involve background tasks. Pass the `AbortSignal` to the competing tasks and call `abort()` in a `finally` block attached to the race to guarantee all losing tasks are cleanly terminated.
