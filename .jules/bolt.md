@@ -12,3 +12,8 @@
 
 **Learning:** When using singleton patterns for startup processes (like spawning a browser or connecting to a database), checking for an already resolved controller (`if (controller !== undefined)`) is insufficient if the initialization is asynchronous. Concurrent calls will bypass the check and trigger duplicate expensive initializations, which can cause race conditions or duplicate processes.
 **Action:** Always memoize the `Promise` of the initialization rather than the resolved value. Remember to handle rejections by clearing the promise so subsequent attempts can retry instead of caching a permanently broken state.
+
+## 2024-05-17 - Prevent orphaned tasks in Promise.race with AbortController
+
+**Learning:** When using `Promise.race` for concurrent tasks (e.g. process startup error stream vs. port polling), the losing promises will continue running in the background. In a polling mechanism like `net.connect` with `setTimeout` retries, this creates orphaned active sockets and timer handles that leak resources and delay process exit if the app fails to start.
+**Action:** Always instantiate an `AbortController` before `Promise.race`, pass the signal to all cancellable tasks, and call `abort()` in a `finally` block to guarantee background tasks are immediately terminated once the race resolves or rejects.
