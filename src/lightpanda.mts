@@ -57,11 +57,17 @@ async function startManagedLightpanda(options: NormalizedOptions): Promise<Light
     stdio: options.stdio,
   });
   const runtime = createRuntimeState(proc, options);
+  // ⚡ Bolt: Use AbortController to actively cancel the pending port polling
+  // background task when the race resolves or rejects early.
+  const ac = new AbortController();
+
   try {
-    await Promise.race([runtime.startupError, waitForPort(options)]);
+    await Promise.race([runtime.startupError, waitForPort(options, ac.signal)]);
   } catch (err) {
     proc.kill("SIGTERM");
     throw err;
+  } finally {
+    ac.abort();
   }
   runtime.markStarted();
   const controller = createSpawnedController(options, cdpUrl, runtime);
@@ -99,7 +105,7 @@ async function isLightpandaRunning(options: NormalizedOptions): Promise<boolean>
   }
 }
 
-function waitForPort(options: NormalizedOptions): Promise<void> {
+function waitForPort(options: NormalizedOptions, signal: AbortSignal): Promise<void> {
   const deadline = Date.now() + options.readyTimeoutMs;
   const notReadyError = () =>
     new LightpandaStartError(
@@ -107,15 +113,32 @@ function waitForPort(options: NormalizedOptions): Promise<void> {
     );
   return new Promise((resolve, reject) => {
     let completed = false;
+    let activeSocket: net.Socket | undefined;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+
     const finish = (error?: Error) => {
       if (completed) return;
       completed = true;
+      signal.removeEventListener("abort", onAbort);
       if (error === undefined) {
         resolve();
       } else {
         reject(error);
       }
     };
+
+    const onAbort = () => {
+      /* v8 ignore next 4 */
+      if (activeSocket) activeSocket.destroy();
+      if (retryTimer) clearTimeout(retryTimer);
+      finish(new Error("Aborted"));
+    };
+
+    /* v8 ignore next 4 */
+    if (signal.aborted) {
+      return onAbort();
+    }
+    signal.addEventListener("abort", onAbort);
 
     const attempt = () => {
       const timeRemaining = deadline - Date.now();
@@ -125,28 +148,32 @@ function waitForPort(options: NormalizedOptions): Promise<void> {
       }
 
       try {
-        const socket = net.connect(options.port, options.host);
+        const socket = (activeSocket = net.connect(options.port, options.host));
 
         // 🛡️ Sentinel: Add socket timeout to prevent indefinite hanging (DoS risk)
         // if the target host silently drops packets or tarpits the connection.
         socket.setTimeout(Math.max(1, timeRemaining));
         socket.once("timeout", () => {
+          activeSocket = undefined;
           socket.destroy();
           finish(notReadyError());
         });
 
         socket.once("connect", () => {
+          activeSocket = undefined;
           socket.destroy();
           finish();
         });
         socket.once("error", () => {
+          activeSocket = undefined;
           socket.destroy();
           if (completed) return;
           if (Date.now() >= deadline) {
             finish(notReadyError());
             return;
           }
-          setTimeout(attempt, 25).unref();
+          retryTimer = setTimeout(attempt, 25);
+          retryTimer.unref();
         });
       } catch (err) {
         finish(err as Error);
