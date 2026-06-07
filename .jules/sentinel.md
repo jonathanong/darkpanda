@@ -13,3 +13,9 @@
 **Learning:** When writing polling or retry mechanisms using `setTimeout` inside a `Promise`, exceptions thrown synchronously during the `setTimeout` callback will _not_ be caught by the Promise executor. They must be explicitly wrapped in a `try/catch` block that rejects the Promise.
 
 **Prevention:** Always wrap all operations inside a `setTimeout` callback with a `try/catch` if they belong to a `Promise` and can potentially throw synchronous exceptions (especially external network API calls like `net.connect` or `http.get`), and explicitly call `reject(err)`.
+
+## 2024-06-07 - Resource leaks from un-cancelled Promises
+
+**Vulnerability:** Port polling via `Promise.race` was leaving background tasks orphaned because the race loser (`waitForPort`) was never cancelled.
+**Learning:** Orphaned background tasks can consume resources indefinitely (DoS risk), especially socket connections or timers.
+**Prevention:** Always use `AbortController` combined with `Promise.race` to explicitly abort/cancel background tasks when the race completes or rejects early.
