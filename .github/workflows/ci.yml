@@ -41,3 +41,4 @@ jobs:
           files: coverage/lcov.info
           fail_ci_if_error: true
           use_oidc: true
+          skip_validation: true
