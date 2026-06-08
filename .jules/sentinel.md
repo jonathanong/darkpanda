@@ -13,3 +13,9 @@
 **Learning:** When writing polling or retry mechanisms using `setTimeout` inside a `Promise`, exceptions thrown synchronously during the `setTimeout` callback will _not_ be caught by the Promise executor. They must be explicitly wrapped in a `try/catch` block that rejects the Promise.
 
 **Prevention:** Always wrap all operations inside a `setTimeout` callback with a `try/catch` if they belong to a `Promise` and can potentially throw synchronous exceptions (especially external network API calls like `net.connect` or `http.get`), and explicitly call `reject(err)`.
+
+## 2024-05-20 - Uncancelled Background Tasks in Promise.race (DoS Risk)
+
+**Vulnerability:** When using `Promise.race` for concurrent background tasks (like polling a port vs. waiting for a process error stream), if one task resolved/rejected early, the other task (the polling loop) was not explicitly cancelled. It continued running in the Node.js event loop, creating orphaned sockets and timeouts until its own timeout expired. This could be exploited to exhaust resources if process starts are repeatedly triggered and fail.
+**Learning:** `Promise.race` does not cancel the losing promises. Any background operations (like intervals, timeouts, or network requests) running within those losing promises must be explicitly stopped.
+**Prevention:** Always use an `AbortController` when racing concurrent async operations that involve polling or long-running tasks. Pass the `signal` to the tasks and call `.abort()` in a `finally` block after the `Promise.race` resolves or rejects.
