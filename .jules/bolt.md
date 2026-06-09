@@ -12,3 +12,8 @@
 
 **Learning:** When using singleton patterns for startup processes (like spawning a browser or connecting to a database), checking for an already resolved controller (`if (controller !== undefined)`) is insufficient if the initialization is asynchronous. Concurrent calls will bypass the check and trigger duplicate expensive initializations, which can cause race conditions or duplicate processes.
 **Action:** Always memoize the `Promise` of the initialization rather than the resolved value. Remember to handle rejections by clearing the promise so subsequent attempts can retry instead of caching a permanently broken state.
+
+## 2024-05-24 - Active Cancellation of Promise.race Pending Tasks
+
+**Learning:** In Node.js, `Promise.race` does not actively cancel the "losing" promises. When racing a background polling task (like repeatedly attempting socket connections to detect a port) against an error stream (like process startup failures), if the error stream wins the race, the background polling will continue to execute independently in the background, consuming resources and event loop cycles until it eventually hits its own internal deadline. This can lead to orphaned timers and background connection attempts.
+**Action:** When using `Promise.race` for concurrent tasks where one resolving/rejecting makes the others obsolete, utilize an `AbortController`. Pass the `AbortSignal` to the background tasks and call `.abort()` in a `try...finally` block around the `Promise.race`. Listen for the "abort" event within the tasks to immediately clean up timers, destroy sockets, and free up resources.
