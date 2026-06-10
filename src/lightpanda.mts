@@ -102,7 +102,7 @@ async function isLightpandaRunning(options: NormalizedOptions): Promise<boolean>
   }
 }
 
-function waitForPort(options: NormalizedOptions, signal?: AbortSignal): Promise<void> {
+function waitForPort(options: NormalizedOptions, signal: AbortSignal): Promise<void> {
   const deadline = Date.now() + options.readyTimeoutMs;
   const notReadyError = () =>
     new LightpandaStartError(
@@ -116,10 +116,7 @@ function waitForPort(options: NormalizedOptions, signal?: AbortSignal): Promise<
     const finish = (error?: Error) => {
       if (completed) return;
       completed = true;
-      /* v8 ignore next 3 */
-      if (signal) {
-        signal.removeEventListener("abort", abortListener);
-      }
+      signal.removeEventListener("abort", abortListener);
       if (error === undefined) {
         resolve();
       } else {
@@ -127,20 +124,15 @@ function waitForPort(options: NormalizedOptions, signal?: AbortSignal): Promise<
       }
     };
 
-    /* v8 ignore next 8 */
     const abortListener = () => {
-      if (activeTimer) clearTimeout(activeTimer);
-      if (activeSocket) activeSocket.destroy();
-      finish(signal?.reason);
+      clearTimeout(activeTimer);
+      activeSocket?.destroy();
+      finish();
     };
 
-    /* v8 ignore next 7 */
-    if (signal) {
-      signal.addEventListener("abort", abortListener);
-      if (signal.aborted) {
-        abortListener();
-      }
-    }
+    signal.addEventListener("abort", abortListener);
+    /* v8 ignore next 1 -- defensive guard: signal is always fresh at call site */
+    if (signal.aborted) abortListener();
 
     const attempt = () => {
       const timeRemaining = deadline - Date.now();
