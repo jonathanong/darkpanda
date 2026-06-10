@@ -30,6 +30,10 @@ export function normalizeOptions(options: LightpandaOptions = {}): NormalizedOpt
   if (typeof versionPath !== "string") {
     throw new Error("versionPath must be a string");
   }
+  // 🛡️ Sentinel: Prevent HTTP Request Splitting via CRLF injection in versionPath
+  if (/[\r\n]/.test(versionPath)) {
+    throw new Error("versionPath cannot contain CRLF characters");
+  }
   if (!versionPath.startsWith("/")) {
     throw new Error("versionPath must start with a single slash");
   }
