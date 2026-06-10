@@ -196,6 +196,46 @@ describe("Lightpanda startup", () => {
     );
   });
 
+  it("destroys the active socket when the process exits before the port is ready", async () => {
+    const port = await getFreePort();
+
+    const connectSpy = vi.spyOn(net, "connect");
+    let capturedSocket: ReturnType<typeof mockSocket> | undefined;
+    connectSpy.mockImplementation(() => {
+      capturedSocket = mockSocket();
+      return capturedSocket as unknown as net.Socket;
+    });
+
+    try {
+      await expect(managerFor(port, "signal-exit").start()).rejects.toThrow(
+        /Lightpanda exited with signal SIGTERM/,
+      );
+      expect(capturedSocket?.destroy).toHaveBeenCalled();
+    } finally {
+      connectSpy.mockRestore();
+    }
+  });
+
+  it("cancels the retry timer when the process exits during port polling backoff", async () => {
+    const port = await getFreePort();
+
+    const connectSpy = vi.spyOn(net, "connect");
+    connectSpy.mockImplementation(() => {
+      const socket = mockSocket();
+      // Emit error via nextTick so the retry timer is set before the startup-error I/O event fires
+      process.nextTick(() => socket.emit("error", new Error("ECONNREFUSED")));
+      return socket as unknown as net.Socket;
+    });
+
+    try {
+      await expect(managerFor(port, "signal-exit").start()).rejects.toThrow(
+        /Lightpanda exited with signal SIGTERM/,
+      );
+    } finally {
+      connectSpy.mockRestore();
+    }
+  });
+
   it("rejects when the port never opens", async () => {
     const port = await getFreePort();
 
