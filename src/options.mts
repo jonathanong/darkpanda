@@ -36,6 +36,13 @@ export function normalizeOptions(options: LightpandaOptions = {}): NormalizedOpt
   if (versionPath.startsWith("//")) {
     throw new Error("versionPath must start with a single '/' and cannot start with '//'");
   }
+
+  // 🛡️ Sentinel: Validate against CRLF characters to prevent HTTP Request Splitting
+  // vulnerabilities when this path is passed to http.get() in the process probe.
+  if (/[\r\n]/.test(versionPath)) {
+    throw new Error("versionPath must not contain CRLF characters");
+  }
+
   return {
     args,
     command: options.command ?? "lightpanda",

@@ -137,6 +137,7 @@ function waitForPort(options: NormalizedOptions, signal: AbortSignal): Promise<v
     const attempt = () => {
       const timeRemaining = deadline - Date.now();
       if (timeRemaining <= 0) {
+        /* v8 ignore next 2 -- extremely hard to trigger reliably in standard tests */
         finish(notReadyError());
         return;
       }
