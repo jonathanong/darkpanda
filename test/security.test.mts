@@ -40,4 +40,20 @@ describe("Security: Synchronous exceptions in retry loops", () => {
       connectSpy.mockRestore();
     }
   });
+
+  describe("HTTP Request Splitting Prevention", () => {
+    it("throws an error if versionPath contains CRLF characters", () => {
+      expect(() => {
+        createLightpandaManager({ versionPath: "/json/version\r\nHost: evil.com" }).start();
+      }).toThrow("versionPath must not contain CRLF characters");
+
+      expect(() => {
+        createLightpandaManager({ versionPath: "/json/version\r" }).start();
+      }).toThrow("versionPath must not contain CRLF characters");
+
+      expect(() => {
+        createLightpandaManager({ versionPath: "/json/version\n" }).start();
+      }).toThrow("versionPath must not contain CRLF characters");
+    });
+  });
 });
