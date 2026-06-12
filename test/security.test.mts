@@ -1,6 +1,7 @@
 import net from "node:net";
 import { fileURLToPath } from "node:url";
 import { createLightpandaManager } from "../src/lightpanda.mts";
+import { normalizeOptions } from "../src/options.mts";
 import { getFreePort } from "./helpers.mts";
 
 const fixture = fileURLToPath(new URL("./fixtures/fake-lightpanda.mjs", import.meta.url));
@@ -39,5 +40,27 @@ describe("Security: Synchronous exceptions in retry loops", () => {
     } finally {
       connectSpy.mockRestore();
     }
+  });
+});
+
+describe("Security: HTTP Request Splitting", () => {
+  it("rejects versionPath containing CRLF characters", () => {
+    expect(() => {
+      normalizeOptions({
+        versionPath: "/json/version\r\nHost: attacker.com",
+      });
+    }).toThrow("versionPath cannot contain carriage return or line feed characters");
+
+    expect(() => {
+      normalizeOptions({
+        versionPath: "/json/version\nGET / HTTP/1.1",
+      });
+    }).toThrow("versionPath cannot contain carriage return or line feed characters");
+
+    expect(() => {
+      normalizeOptions({
+        versionPath: "/json/version\rX-Injected-Header: value",
+      });
+    }).toThrow("versionPath cannot contain carriage return or line feed characters");
   });
 });
