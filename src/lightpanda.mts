@@ -91,7 +91,12 @@ async function isLightpandaRunning(options: NormalizedOptions): Promise<boolean>
           resolve(res.statusCode !== undefined && res.statusCode >= 200 && res.statusCode < 300);
         },
       );
-      req.on("error", () => resolve(false));
+      req.on("error", () => {
+        // ⚡ Bolt: Destroy the request on error to prevent leaked file descriptors/sockets
+        // from keeping the event loop alive and delaying process exit.
+        req.destroy();
+        resolve(false);
+      });
       req.on("timeout", () => {
         req.destroy();
         resolve(false);
