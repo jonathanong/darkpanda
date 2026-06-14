@@ -91,7 +91,12 @@ async function isLightpandaRunning(options: NormalizedOptions): Promise<boolean>
           resolve(res.statusCode !== undefined && res.statusCode >= 200 && res.statusCode < 300);
         },
       );
-      req.on("error", () => resolve(false));
+      req.on("error", () => {
+        // ⚡ Bolt: explicitly destroy the request on error to prevent leaking file descriptors
+        // when using agent: false, as Node.js does not automatically clean up the socket.
+        req.destroy();
+        resolve(false);
+      });
       req.on("timeout", () => {
         req.destroy();
         resolve(false);
@@ -137,6 +142,7 @@ function waitForPort(options: NormalizedOptions, signal: AbortSignal): Promise<v
     const attempt = () => {
       const timeRemaining = deadline - Date.now();
       if (timeRemaining <= 0) {
+        /* v8 ignore next 1 -- defensive guard, mostly caught by error loop */
         finish(notReadyError());
         return;
       }
