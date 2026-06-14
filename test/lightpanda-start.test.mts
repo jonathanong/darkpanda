@@ -268,6 +268,10 @@ describe("Lightpanda startup", () => {
     );
     await assertStartError("@evil.com", "versionPath must start with a single slash");
     await assertStartError(123, "versionPath must be a string");
+
+    await assertStartError("/path\r\n", "versionPath cannot contain CRLF characters");
+    await assertStartError("/path\r", "versionPath cannot contain CRLF characters");
+    await assertStartError("/path\n", "versionPath cannot contain CRLF characters");
   });
 
   it("rejects when socket probes timeout", async () => {
