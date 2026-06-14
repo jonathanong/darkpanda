@@ -17,3 +17,8 @@
 
 **Learning:** When using `Promise.race` for concurrent background tasks (like polling a port vs. waiting for a process stream), the losing promise is not cancelled automatically. It continues running in the background, consuming resources and potentially causing unhandled exceptions or connection leaks.
 **Action:** Always use an `AbortController` when racing promises. Pass the `signal` to background tasks and `abort()` it in a `finally` block around the race to actively cancel and clean up pending operations.
+
+## 2024-11-20 - Unmanaged HTTP request cleanup
+
+**Learning:** When using `http.get` without a managed agent (e.g., `agent: false`), explicitly call `req.destroy()` in the `error` event handler. Node.js does not automatically destroy the request upon emitting an error, which can leak file descriptors and keep the event loop alive.
+**Action:** Always call `req.destroy()` in the error handler for unmanaged `http.get` requests.
