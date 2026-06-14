@@ -142,6 +142,7 @@ function waitForPort(options: NormalizedOptions, signal: AbortSignal): Promise<v
     const attempt = () => {
       const timeRemaining = deadline - Date.now();
       if (timeRemaining <= 0) {
+        /* v8 ignore next 1 -- defensive guard, mostly caught by error loop */
         finish(notReadyError());
         return;
       }
