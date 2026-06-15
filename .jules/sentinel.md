@@ -13,3 +13,9 @@
 **Learning:** When writing polling or retry mechanisms using `setTimeout` inside a `Promise`, exceptions thrown synchronously during the `setTimeout` callback will _not_ be caught by the Promise executor. They must be explicitly wrapped in a `try/catch` block that rejects the Promise.
 
 **Prevention:** Always wrap all operations inside a `setTimeout` callback with a `try/catch` if they belong to a `Promise` and can potentially throw synchronous exceptions (especially external network API calls like `net.connect` or `http.get`), and explicitly call `reject(err)`.
+
+## 2024-05-28 - HTTP Request Splitting via user-configurable paths
+
+**Vulnerability:** The user-configurable `versionPath` option was passed directly to `http.get` without validating against carriage return (`\r`) and line feed (`\n`) characters. A malicious configuration could inject headers or split the request, known as HTTP Request Splitting.
+**Learning:** Node.js native `http` module does not strictly prevent or sanitize CRLF characters from URL paths, allowing path-based HTTP Request Splitting if the path originates from untrusted user input or configuration.
+**Prevention:** Always validate user-provided paths and headers for CRLF characters (`/[\r\n]/`) before passing them to native `http` functions.

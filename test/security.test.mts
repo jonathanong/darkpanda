@@ -5,6 +5,22 @@ import { getFreePort } from "./helpers.mts";
 
 const fixture = fileURLToPath(new URL("./fixtures/fake-lightpanda.mjs", import.meta.url));
 
+import { normalizeOptions } from "../src/options.mts";
+
+describe("Security: HTTP Request Splitting", () => {
+  it("rejects versionPath containing CRLF characters", () => {
+    expect(() =>
+      normalizeOptions({ versionPath: "/json/version\r\nConnection: keep-alive" }),
+    ).toThrow("versionPath cannot contain CRLF characters");
+    expect(() => normalizeOptions({ versionPath: "/json/version\n" })).toThrow(
+      "versionPath cannot contain CRLF characters",
+    );
+    expect(() => normalizeOptions({ versionPath: "/json/version\r" })).toThrow(
+      "versionPath cannot contain CRLF characters",
+    );
+  });
+});
+
 describe("Security: Synchronous exceptions in retry loops", () => {
   it("rejects when net.connect throws synchronously during a retry", async () => {
     const port = await getFreePort();
