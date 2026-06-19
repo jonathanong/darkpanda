@@ -1,9 +1,24 @@
 import net from "node:net";
 import { fileURLToPath } from "node:url";
 import { createLightpandaManager } from "../src/lightpanda.mts";
+import { normalizeOptions } from "../src/options.mts";
 import { getFreePort } from "./helpers.mts";
 
 const fixture = fileURLToPath(new URL("./fixtures/fake-lightpanda.mjs", import.meta.url));
+
+describe("Security: HTTP Request Splitting", () => {
+  it("rejects versionPath containing CRLF characters", () => {
+    expect(() => normalizeOptions({ versionPath: "/json/version\r\nHost: evil.com" })).toThrow(
+      "versionPath cannot contain CRLF characters",
+    );
+    expect(() => normalizeOptions({ versionPath: "/json/version\r" })).toThrow(
+      "versionPath cannot contain CRLF characters",
+    );
+    expect(() => normalizeOptions({ versionPath: "/json/version\n" })).toThrow(
+      "versionPath cannot contain CRLF characters",
+    );
+  });
+});
 
 describe("Security: Synchronous exceptions in retry loops", () => {
   it("rejects when net.connect throws synchronously during a retry", async () => {
