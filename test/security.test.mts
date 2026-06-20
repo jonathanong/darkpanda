@@ -2,6 +2,7 @@ import net from "node:net";
 import { fileURLToPath } from "node:url";
 import { createLightpandaManager } from "../src/lightpanda.mts";
 import { getFreePort } from "./helpers.mts";
+import { normalizeOptions } from "../src/options.mts";
 
 const fixture = fileURLToPath(new URL("./fixtures/fake-lightpanda.mjs", import.meta.url));
 
@@ -39,5 +40,13 @@ describe("Security: Synchronous exceptions in retry loops", () => {
     } finally {
       connectSpy.mockRestore();
     }
+  });
+});
+
+describe("Security: HTTP Request Splitting", () => {
+  it("rejects CRLF in versionPath", () => {
+    expect(() => normalizeOptions({ versionPath: "/json/version\r\n" })).toThrow(
+      "versionPath cannot contain CRLF characters",
+    );
   });
 });
