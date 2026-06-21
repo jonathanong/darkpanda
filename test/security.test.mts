@@ -41,3 +41,18 @@ describe("Security: Synchronous exceptions in retry loops", () => {
     }
   });
 });
+
+describe("Security: HTTP Request Splitting", () => {
+  it("rejects versionPath with CRLF characters", async () => {
+    const { normalizeOptions } = await import("../src/options.mts");
+    expect(() => normalizeOptions({ versionPath: "/json/version\r\n" })).toThrow(
+      "versionPath cannot contain CRLF characters",
+    );
+    expect(() => normalizeOptions({ versionPath: "/json/version\r" })).toThrow(
+      "versionPath cannot contain CRLF characters",
+    );
+    expect(() => normalizeOptions({ versionPath: "/json/version\n" })).toThrow(
+      "versionPath cannot contain CRLF characters",
+    );
+  });
+});

@@ -13,3 +13,11 @@
 **Learning:** When writing polling or retry mechanisms using `setTimeout` inside a `Promise`, exceptions thrown synchronously during the `setTimeout` callback will _not_ be caught by the Promise executor. They must be explicitly wrapped in a `try/catch` block that rejects the Promise.
 
 **Prevention:** Always wrap all operations inside a `setTimeout` callback with a `try/catch` if they belong to a `Promise` and can potentially throw synchronous exceptions (especially external network API calls like `net.connect` or `http.get`), and explicitly call `reject(err)`.
+
+## 2026-06-21 - HTTP Request Splitting via versionPath
+
+**Vulnerability:** The `versionPath` option in `LightpandaOptions` was not validated against CRLF characters (`\r`, `\n`). When this value is passed to `http.get()` in `isLightpandaRunning`, an attacker who controls the `versionPath` configuration could inject arbitrary HTTP headers or perform HTTP Request Splitting.
+
+**Learning:** Node.js's native `http` module does not fully sanitize headers/paths against CRLF characters natively in all versions/contexts, so user-controlled paths passed to options objects for `http.get` must be manually validated.
+
+**Prevention:** Always validate configuration options that are incorporated into HTTP requests or headers to ensure they do not contain `\r` or `\n` characters, throwing synchronously during option normalization if they do.
