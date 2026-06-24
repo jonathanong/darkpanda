@@ -17,3 +17,8 @@
 
 **Learning:** When using `Promise.race` for concurrent background tasks (like polling a port vs. waiting for a process stream), the losing promise is not cancelled automatically. It continues running in the background, consuming resources and potentially causing unhandled exceptions or connection leaks.
 **Action:** Always use an `AbortController` when racing promises. Pass the `signal` to background tasks and `abort()` it in a `finally` block around the race to actively cancel and clean up pending operations.
+
+## 2024-06-24 - File Descriptor Leak with http.get
+
+**Learning:** When using `http.get` without a managed agent (`agent: false`), Node.js does not automatically destroy the `ClientRequest` when an error occurs. This can lead to file descriptor leaks and keep the event loop alive unexpectedly.
+**Action:** Always explicitly call `req.destroy()` in the `error` event handler when using `http.get` with `agent: false`.
