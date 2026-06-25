@@ -1,6 +1,7 @@
 import net from "node:net";
 import { fileURLToPath } from "node:url";
 import { createLightpandaManager } from "../src/lightpanda.mts";
+import { normalizeOptions } from "../src/options.mts";
 import { getFreePort } from "./helpers.mts";
 
 const fixture = fileURLToPath(new URL("./fixtures/fake-lightpanda.mjs", import.meta.url));
@@ -41,8 +42,6 @@ describe("Security: Synchronous exceptions in retry loops", () => {
     }
   });
 });
-
-import { normalizeOptions } from "../src/options.mts";
 
 describe("Security: HTTP Request Splitting prevention", () => {
   it("rejects versionPath containing CRLF characters", () => {
