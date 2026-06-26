@@ -39,7 +39,7 @@ export function normalizeOptions(options: LightpandaOptions = {}): NormalizedOpt
 
   // 🛡️ Sentinel: Validate against CRLF characters to prevent HTTP Request Splitting.
   // Node.js doesn't always sanitize user-configurable paths in `http.get`.
-  if (/[\r\n]/.test(versionPath)) {
+  if (versionPath.includes("\r") || versionPath.includes("\n")) {
     throw new Error("versionPath cannot contain CRLF characters (\\r or \\n)");
   }
 
