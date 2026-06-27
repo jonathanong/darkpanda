@@ -268,6 +268,19 @@ describe("Lightpanda startup", () => {
     );
     await assertStartError("@evil.com", "versionPath must start with a single slash");
     await assertStartError(123, "versionPath must be a string");
+    await assertStartError("/test\r\n", "versionPath cannot contain CRLF characters");
+  });
+
+  it("throws an error when host contains CRLF characters", async () => {
+    let error: unknown;
+    try {
+      await createLightpandaManager({ host: "127.0.0.1\r\n" }).start();
+      error = new Error("Expected start() to throw");
+    } catch (err) {
+      error = err;
+    }
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toBe("host cannot contain CRLF characters");
   });
 
   it("rejects when socket probes timeout", async () => {

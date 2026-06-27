@@ -8,6 +8,9 @@ const DEFAULT_SHUTDOWN_TIMEOUT_MS = 5_000;
 
 export function normalizeOptions(options: LightpandaOptions = {}): NormalizedOptions {
   const host = options.host ?? DEFAULT_HOST;
+  if (host.includes("\r") || host.includes("\n")) {
+    throw new Error("host cannot contain CRLF characters");
+  }
   const port = options.port ?? DEFAULT_PORT;
   const logLevel = options.logLevel ?? "error";
   const block = options.blockPrivateNetworks ?? true;
@@ -35,6 +38,9 @@ export function normalizeOptions(options: LightpandaOptions = {}): NormalizedOpt
   }
   if (versionPath.startsWith("//")) {
     throw new Error("versionPath must start with a single '/' and cannot start with '//'");
+  }
+  if (versionPath.includes("\r") || versionPath.includes("\n")) {
+    throw new Error("versionPath cannot contain CRLF characters");
   }
   return {
     args,
