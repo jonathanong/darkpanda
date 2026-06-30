@@ -119,6 +119,7 @@ describe("Lightpanda runtime behavior", () => {
       blockPrivateNetworks: false,
       logLevel: "debug",
       telemetry: true,
+      readyTimeoutMs: 1000,
     }).start();
 
     expect(controller.cdpUrl).toBe(`ws://127.0.0.1:${port}`);
