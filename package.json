@@ -31,12 +31,12 @@
     "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm coverage && pnpm build"
   },
   "devDependencies": {
-    "@types/node": "25.9.2",
-    "@vitest/coverage-v8": "4.1.8",
-    "oxfmt": "0.53.0",
-    "oxlint": "1.68.0",
+    "@types/node": "26.0.1",
+    "@vitest/coverage-v8": "4.1.9",
+    "oxfmt": "0.56.0",
+    "oxlint": "1.71.0",
     "typescript": "6.0.3",
-    "vitest": "4.1.8"
+    "vitest": "4.1.9"
   },
   "engines": {
     "node": ">=24"
