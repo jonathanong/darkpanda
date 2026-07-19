@@ -11,4 +11,4 @@ jobs:
   labeler:
     runs-on: ubuntu-slim
     steps:
-      - uses: actions/labeler@v6.1.0
+      - uses: actions/labeler@v6.2.0
